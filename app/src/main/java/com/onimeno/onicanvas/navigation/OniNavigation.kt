@@ -9,6 +9,9 @@ object DashboardRoute
 object WorkspaceRoute
 
 @Serializable
+data class WorkspaceEditorRoute(val workspaceId: String)
+
+@Serializable
 object ControlsRoute
 
 @Serializable

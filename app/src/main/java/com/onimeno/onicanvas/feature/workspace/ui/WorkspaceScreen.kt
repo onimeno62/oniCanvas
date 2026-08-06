@@ -75,6 +75,7 @@ import com.onimeno.onicanvas.feature.workspace.viewmodel.WorkspaceViewModel
 
 @Composable
 fun WorkspaceScreen(
+    onWorkspaceClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WorkspaceViewModel = viewModel()
 ) {
@@ -135,7 +136,8 @@ fun WorkspaceScreen(
                         state = state,
                         onSearchQueryChange = { viewModel.updateSearchQuery(it) },
                         onToggleFavoritesOnly = { viewModel.toggleFavoritesOnly() },
-                        onToggleFavorite = { viewModel.toggleFavorite(it) }
+                        onToggleFavorite = { viewModel.toggleFavorite(it) },
+                        onWorkspaceClick = onWorkspaceClick
                     )
                 }
                 is WorkspaceUiState.Error -> {
@@ -178,6 +180,7 @@ fun WorkspaceListContent(
     onSearchQueryChange: (String) -> Unit,
     onToggleFavoritesOnly: () -> Unit,
     onToggleFavorite: (String) -> Unit,
+    onWorkspaceClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
@@ -273,7 +276,8 @@ fun WorkspaceListContent(
                 items(state.workspaces, key = { it.id }) { workspace ->
                     WorkspaceRowItem(
                         workspace = workspace,
-                        onToggleFavorite = { onToggleFavorite(workspace.id) }
+                        onToggleFavorite = { onToggleFavorite(workspace.id) },
+                        onClick = { onWorkspaceClick(workspace.id) }
                     )
                 }
             }
@@ -285,6 +289,7 @@ fun WorkspaceListContent(
 fun WorkspaceRowItem(
     workspace: WorkspaceItem,
     onToggleFavorite: () -> Unit,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
@@ -299,7 +304,8 @@ fun WorkspaceRowItem(
     OniCard(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("workspace_item_${workspace.id}")
+            .testTag("workspace_item_${workspace.id}"),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

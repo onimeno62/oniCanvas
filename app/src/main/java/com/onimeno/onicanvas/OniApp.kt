@@ -34,6 +34,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.onimeno.onicanvas.feature.about.ui.AboutScreen
 import com.onimeno.onicanvas.feature.connection.ui.ConnectionScreen
 import com.onimeno.onicanvas.feature.controls.ui.ControlsScreen
@@ -42,6 +43,7 @@ import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModel
 import com.onimeno.onicanvas.feature.profiles.ui.ProfilesScreen
 import com.onimeno.onicanvas.feature.settings.ui.SettingsScreen
 import com.onimeno.onicanvas.feature.workspace.ui.WorkspaceScreen
+import com.onimeno.onicanvas.feature.workspace.ui.WorkspaceEditorScreen
 import com.onimeno.onicanvas.navigation.AboutRoute
 import com.onimeno.onicanvas.navigation.ConnectionRoute
 import com.onimeno.onicanvas.navigation.ControlsRoute
@@ -49,6 +51,7 @@ import com.onimeno.onicanvas.navigation.DashboardRoute
 import com.onimeno.onicanvas.navigation.ProfilesRoute
 import com.onimeno.onicanvas.navigation.SettingsRoute
 import com.onimeno.onicanvas.navigation.WorkspaceRoute
+import com.onimeno.onicanvas.navigation.WorkspaceEditorRoute
 
 // Bottom Bar Destination Configuration
 data class BottomNavItem<T : Any>(
@@ -173,7 +176,17 @@ fun OniApp() {
                 }
                 
                 composable<WorkspaceRoute> {
-                    WorkspaceScreen()
+                    WorkspaceScreen(onWorkspaceClick = { id ->
+                        navController.navigate(WorkspaceEditorRoute(id))
+                    })
+                }
+
+                composable<WorkspaceEditorRoute> { backStackEntry ->
+                    val route: WorkspaceEditorRoute = backStackEntry.toRoute()
+                    WorkspaceEditorScreen(
+                        workspaceId = route.workspaceId,
+                        onBackClick = { navController.popBackStack() }
+                    )
                 }
 
                 composable<ControlsRoute> {

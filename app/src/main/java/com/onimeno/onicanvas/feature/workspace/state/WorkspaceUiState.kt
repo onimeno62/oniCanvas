@@ -1,5 +1,13 @@
 package com.onimeno.onicanvas.feature.workspace.state
 
+enum class ControlModule(val displayName: String, val description: String) {
+    MACRO_PAD("Macro Pad", "Custom macro action keys and modifier overrides"),
+    GESTURE_PAD("Gesture Pad", "Custom gestural bindings and trackpad behavior"),
+    RADIAL_MENU("Radial Menu", "Quick-access overlay radial menu for brush control"),
+    SHORTCUT_GRID("Shortcut Grid", "Grid of keyboard shortcuts and utility triggers"),
+    BRUSH_CONTROLS("Brush Controls", "Dedicated sliders for brush size, opacity, and flow")
+}
+
 data class WorkspaceItem(
     val id: String,
     val name: String,
@@ -8,7 +16,8 @@ data class WorkspaceItem(
     val buttonCount: Int,
     val iconName: String,
     val isFavorite: Boolean = false,
-    val lastUsed: String
+    val lastUsed: String,
+    val enabledModules: List<ControlModule> = ControlModule.values().toList()
 )
 
 sealed interface WorkspaceUiState {

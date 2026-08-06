@@ -189,11 +189,11 @@ fun OniApp() {
                 }
 
                 composable<SettingsRoute> {
-                    SettingsScreen()
+                    SettingsScreen(onBackClick = { navController.popBackStack() })
                 }
 
                 composable<AboutRoute> {
-                    AboutScreen()
+                    AboutScreen(onBackClick = { navController.popBackStack() })
                 }
             }
         }

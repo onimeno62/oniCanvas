@@ -1,5 +1,5 @@
 {
-  "name": "OniCanvas",
+  "name": "oniCanvas",
   "description": "Professional Android companion for Clip Studio Paint and creative software.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

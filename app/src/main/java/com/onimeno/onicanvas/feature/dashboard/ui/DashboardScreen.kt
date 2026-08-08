@@ -95,9 +95,9 @@ fun DashboardContent(state: DashboardUiState.Success, isTablet: Boolean, onNavig
             }
             LazyColumn(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
                 item { OniSectionHeader(title = "Quick Controls") }
-                item { DashboardQuickActions(state.quickActions, true) { if (it == QuickActionType.CONNECT) onNavigateToConnection() else onNavigateToControls() } }
+                item { DashboardQuickActions(quickActions = state.quickActions, isTablet = true, onActionClick = { if (it == QuickActionType.CONNECT) onNavigateToConnection() else onNavigateToControls() }) }
                 item { Spacer(Modifier.height(spacing.small)) }
-                item { OniSectionHeader(title = "Recent Workspaces", action = { Text("VIEW ALL", MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.clickable(onClick = onNavigateToWorkspace)) }) }
+                item { OniSectionHeader(title = "Recent Workspaces", action = { Text("VIEW ALL", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.clickable(onClick = onNavigateToWorkspace)) }) }
                 items(state.recentWorkspaces) { workspace -> RecentWorkspaceRow(workspace = workspace, onClick = onNavigateToWorkspace) }
             }
         }
@@ -109,9 +109,9 @@ fun DashboardContent(state: DashboardUiState.Success, isTablet: Boolean, onNavig
             item { DashboardDeviceStatus(state.latencyMs, state.batteryLevel) }
             item { Spacer(Modifier.height(spacing.extraSmall)) }
             item { OniSectionHeader(title = "Quick Controls") }
-            item { DashboardQuickActions(state.quickActions, false) { if (it == QuickActionType.CONNECT) onNavigateToConnection() else onNavigateToControls() } }
+            item { DashboardQuickActions(quickActions = state.quickActions, isTablet = false, onActionClick = { if (it == QuickActionType.CONNECT) onNavigateToConnection() else onNavigateToControls() }) }
             item { Spacer(Modifier.height(spacing.extraSmall)) }
-            item { OniSectionHeader(title = "Recent Workspaces", action = { Text("VIEW ALL", MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.clickable(onClick = onNavigateToWorkspace)) }) }
+            item { OniSectionHeader(title = "Recent Workspaces", action = { Text("VIEW ALL", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.clickable(onClick = onNavigateToWorkspace)) }) }
             items(state.recentWorkspaces) { workspace -> RecentWorkspaceRow(workspace = workspace, onClick = onNavigateToWorkspace) }
         }
     }
@@ -125,8 +125,8 @@ fun RecentWorkspaceRow(workspace: com.onimeno.onicanvas.feature.dashboard.state.
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
             Box(Modifier.size(36.dp).background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) { Icon(workspaceIcon, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp)) }
             Spacer(Modifier.width(spacing.medium))
-            Column { Text(workspace.name, MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface); Spacer(Modifier.height(2.dp)); Text(workspace.description, MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Column { Text(workspace.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface); Spacer(Modifier.height(2.dp)); Text(workspace.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        Box(Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), CircleShape).padding(horizontal = 8.dp, vertical = 4.dp)) { Text("${workspace.buttonCount} MACROS", MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold) }
+        Box(Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), CircleShape).padding(horizontal = 8.dp, vertical = 4.dp)) { Text("${workspace.buttonCount} MACROS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold) }
     }
 }

@@ -11,242 +11,112 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class WorkspaceEditorViewModel : ViewModel() {
-
-    private val repository = WorkspaceRepository.getInstance()
+class WorkspaceEditorViewModel(
+    private val repository: WorkspaceRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WorkspaceEditorUiState>(WorkspaceEditorUiState.Loading)
     val uiState: StateFlow<WorkspaceEditorUiState> = _uiState.asStateFlow()
-
     private val undoStack = mutableListOf<EditorCommand>()
     private val redoStack = mutableListOf<EditorCommand>()
 
-    fun loadWorkspace(id: String) {
-        viewModelScope.launch {
-            _uiState.value = WorkspaceEditorUiState.Loading
-            val workspace = repository.getWorkspace(id)
-            if (workspace != null) {
-                undoStack.clear()
-                redoStack.clear()
-                _uiState.value = WorkspaceEditorUiState.Success(
-                    originalWorkspace = workspace,
-                    editingWorkspace = workspace,
-                    isDirty = false,
-                    canUndo = false,
-                    canRedo = false
-                )
-            } else {
-                _uiState.value = WorkspaceEditorUiState.Error("Workspace not found")
-            }
-        }
+    fun loadWorkspace(id: String) = viewModelScope.launch {
+        _uiState.value = WorkspaceEditorUiState.Loading
+        val workspace = repository.getWorkspace(id)
+        if (workspace != null) {
+            undoStack.clear(); redoStack.clear()
+            _uiState.value = WorkspaceEditorUiState.Success(workspace, workspace, false, false, false)
+        } else _uiState.value = WorkspaceEditorUiState.Error("Workspace not found")
     }
 
     private fun executeCommand(command: EditorCommand) {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        val newEditing = command.execute(currentState.editingWorkspace)
-        undoStack.add(command)
-        redoStack.clear()
-        _uiState.value = currentState.copy(
-            editingWorkspace = newEditing,
-            isDirty = newEditing != currentState.originalWorkspace,
-            canUndo = undoStack.isNotEmpty(),
-            canRedo = redoStack.isNotEmpty()
-        )
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        val editing = command.execute(state.editingWorkspace)
+        undoStack.add(command); redoStack.clear()
+        _uiState.value = state.copy(editingWorkspace = editing, isDirty = editing != state.originalWorkspace, canUndo = true, canRedo = false)
     }
 
     fun undo() {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
         if (undoStack.isEmpty()) return
-        val command = undoStack.removeAt(undoStack.lastIndex)
-        val newEditing = command.undo(currentState.editingWorkspace)
-        redoStack.add(command)
-        _uiState.value = currentState.copy(
-            editingWorkspace = newEditing,
-            isDirty = newEditing != currentState.originalWorkspace,
-            canUndo = undoStack.isNotEmpty(),
-            canRedo = redoStack.isNotEmpty()
-        )
+        val command = undoStack.removeAt(undoStack.lastIndex); redoStack.add(command)
+        val editing = command.undo(state.editingWorkspace)
+        _uiState.value = state.copy(editingWorkspace = editing, isDirty = editing != state.originalWorkspace, canUndo = undoStack.isNotEmpty(), canRedo = true)
     }
 
     fun redo() {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
         if (redoStack.isEmpty()) return
-        val command = redoStack.removeAt(redoStack.lastIndex)
-        val newEditing = command.execute(currentState.editingWorkspace)
-        undoStack.add(command)
-        _uiState.value = currentState.copy(
-            editingWorkspace = newEditing,
-            isDirty = newEditing != currentState.originalWorkspace,
-            canUndo = undoStack.isNotEmpty(),
-            canRedo = redoStack.isNotEmpty()
-        )
+        val command = redoStack.removeAt(redoStack.lastIndex); undoStack.add(command)
+        val editing = command.execute(state.editingWorkspace)
+        _uiState.value = state.copy(editingWorkspace = editing, isDirty = editing != state.originalWorkspace, canUndo = true, canRedo = redoStack.isNotEmpty())
     }
 
-    fun toggleModule(module: ControlModule) {
-        executeCommand(ToggleModuleCommand(module))
-    }
-
-    fun moveModuleUp(index: Int) {
-        if (index > 0) {
-            executeCommand(MoveModuleCommand(index, index - 1))
-        }
-    }
-
+    fun toggleModule(module: ControlModule) { executeCommand(ToggleModuleCommand(module)) }
+    fun moveModuleUp(index: Int) { if (index > 0) executeCommand(MoveModuleCommand(index, index - 1)) }
     fun moveModuleDown(index: Int) {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        if (index < currentState.editingWorkspace.enabledModules.lastIndex) {
-            executeCommand(MoveModuleCommand(index, index + 1))
-        }
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        if (index < state.editingWorkspace.enabledModules.lastIndex) executeCommand(MoveModuleCommand(index, index + 1))
     }
 
     fun updateDetails(name: String, targetApp: String, description: String) {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        val editing = currentState.editingWorkspace
-        executeCommand(
-            UpdateDetailsCommand(
-                oldName = editing.name, newName = name,
-                oldApp = editing.targetApp, newApp = targetApp,
-                oldDesc = editing.description, newDesc = description
-            )
-        )
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        val editing = state.editingWorkspace
+        executeCommand(UpdateDetailsCommand(editing.name, name, editing.targetApp, targetApp, editing.description, description))
     }
 
     fun toggleFavorite() {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        val editing = currentState.editingWorkspace
-        val updated = editing.copy(isFavorite = !editing.isFavorite)
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        val updated = state.editingWorkspace.copy(isFavorite = !state.editingWorkspace.isFavorite)
         repository.saveWorkspace(updated)
-        _uiState.value = currentState.copy(
-            originalWorkspace = if (!currentState.isDirty) updated else currentState.originalWorkspace,
-            editingWorkspace = updated
-        )
+        _uiState.value = state.copy(originalWorkspace = if (!state.isDirty) updated else state.originalWorkspace, editingWorkspace = updated)
     }
 
     fun save() {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        val savedWorkspace = currentState.editingWorkspace.copy(lastUsed = "Just edited")
-        repository.saveWorkspace(savedWorkspace)
-        undoStack.clear()
-        redoStack.clear()
-        _uiState.value = currentState.copy(
-            originalWorkspace = savedWorkspace,
-            editingWorkspace = savedWorkspace,
-            isDirty = false,
-            canUndo = false,
-            canRedo = false
-        )
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        val saved = state.editingWorkspace.copy(lastUsed = "Just edited")
+        repository.saveWorkspace(saved); undoStack.clear(); redoStack.clear()
+        _uiState.value = state.copy(originalWorkspace = saved, editingWorkspace = saved, isDirty = false, canUndo = false, canRedo = false)
     }
 
     fun saveAs(newName: String) {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        val newId = "custom_${System.currentTimeMillis()}"
-        val newWorkspace = currentState.editingWorkspace.copy(
-            id = newId,
-            name = newName,
-            isFavorite = false,
-            lastUsed = "Just created"
-        )
-        repository.saveWorkspace(newWorkspace)
-        loadWorkspace(newId)
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        val newWorkspace = state.editingWorkspace.copy(id = "custom_${System.currentTimeMillis()}", name = newName, isFavorite = false, lastUsed = "Just created")
+        repository.saveWorkspace(newWorkspace); loadWorkspace(newWorkspace.id)
     }
 
     fun revert() {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        undoStack.clear()
-        redoStack.clear()
-        _uiState.value = currentState.copy(
-            editingWorkspace = currentState.originalWorkspace,
-            isDirty = false,
-            canUndo = false,
-            canRedo = false
-        )
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        undoStack.clear(); redoStack.clear()
+        _uiState.value = state.copy(editingWorkspace = state.originalWorkspace, isDirty = false, canUndo = false, canRedo = false)
     }
 
     fun duplicate() {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        val originalId = currentState.originalWorkspace.id
-        val duplicated = repository.duplicateWorkspace(originalId, "${currentState.originalWorkspace.name} (Copy)")
-        if (duplicated != null) {
-            loadWorkspace(duplicated.id)
-        }
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        repository.duplicateWorkspace(state.originalWorkspace.id, "${state.originalWorkspace.name} (Copy)")?.let { loadWorkspace(it.id) }
     }
 
     fun delete(onDeleted: () -> Unit) {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        repository.deleteWorkspace(currentState.originalWorkspace.id)
-        onDeleted()
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        repository.deleteWorkspace(state.originalWorkspace.id); onDeleted()
     }
 
-    fun showRenameDialog(show: Boolean) {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        _uiState.value = currentState.copy(showRenameDialog = show)
-    }
-
-    fun showSaveAsDialog(show: Boolean) {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        _uiState.value = currentState.copy(showSaveAsDialog = show)
-    }
-
-    fun showDeleteConfirmDialog(show: Boolean) {
-        val currentState = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        _uiState.value = currentState.copy(showDeleteConfirmDialog = show)
-    }
+    fun showRenameDialog(show: Boolean) { updateDialogState { it.copy(showRenameDialog = show) } }
+    fun showSaveAsDialog(show: Boolean) { updateDialogState { it.copy(showSaveAsDialog = show) } }
+    fun showDeleteConfirmDialog(show: Boolean) { updateDialogState { it.copy(showDeleteConfirmDialog = show) } }
+    private fun updateDialogState(transform: (WorkspaceEditorUiState.Success) -> WorkspaceEditorUiState.Success) { (_uiState.value as? WorkspaceEditorUiState.Success)?.let { _uiState.value = transform(it) } }
 }
 
-private interface EditorCommand {
-    fun execute(workspace: WorkspaceItem): WorkspaceItem
-    fun undo(workspace: WorkspaceItem): WorkspaceItem
-}
-
+private interface EditorCommand { fun execute(workspace: WorkspaceItem): WorkspaceItem; fun undo(workspace: WorkspaceItem): WorkspaceItem }
 private class ToggleModuleCommand(private val module: ControlModule) : EditorCommand {
-    override fun execute(workspace: WorkspaceItem): WorkspaceItem {
-        val current = workspace.enabledModules.toMutableList()
-        if (current.contains(module)) {
-            current.remove(module)
-        } else {
-            current.add(module)
-        }
-        return workspace.copy(
-            enabledModules = current,
-            buttonCount = current.size * 4
-        )
-    }
-
-    override fun undo(workspace: WorkspaceItem): WorkspaceItem {
-        return execute(workspace)
-    }
+    override fun execute(workspace: WorkspaceItem): WorkspaceItem { val list = workspace.enabledModules.toMutableList(); if (module in list) list.remove(module) else list.add(module); return workspace.copy(enabledModules = list, buttonCount = list.size * 4) }
+    override fun undo(workspace: WorkspaceItem) = execute(workspace)
 }
-
-private class MoveModuleCommand(private val fromIndex: Int, private val toIndex: Int) : EditorCommand {
-    override fun execute(workspace: WorkspaceItem): WorkspaceItem {
-        val current = workspace.enabledModules.toMutableList()
-        if (fromIndex in current.indices && toIndex in current.indices) {
-            val item = current.removeAt(fromIndex)
-            current.add(toIndex, item)
-        }
-        return workspace.copy(enabledModules = current)
-    }
-
-    override fun undo(workspace: WorkspaceItem): WorkspaceItem {
-        val current = workspace.enabledModules.toMutableList()
-        if (toIndex in current.indices && fromIndex in current.indices) {
-            val item = current.removeAt(toIndex)
-            current.add(fromIndex, item)
-        }
-        return workspace.copy(enabledModules = current)
-    }
+private class MoveModuleCommand(private val from: Int, private val to: Int) : EditorCommand {
+    override fun execute(workspace: WorkspaceItem): WorkspaceItem { val list = workspace.enabledModules.toMutableList(); if (from in list.indices && to in list.indices) list.add(to, list.removeAt(from)); return workspace.copy(enabledModules = list) }
+    override fun undo(workspace: WorkspaceItem): WorkspaceItem { val list = workspace.enabledModules.toMutableList(); if (to in list.indices && from in list.indices) list.add(from, list.removeAt(to)); return workspace.copy(enabledModules = list) }
 }
-
-private class UpdateDetailsCommand(
-    private val oldName: String, private val newName: String,
-    private val oldApp: String, private val newApp: String,
-    private val oldDesc: String, private val newDesc: String
-) : EditorCommand {
-    override fun execute(workspace: WorkspaceItem): WorkspaceItem {
-        return workspace.copy(name = newName, targetApp = newApp, description = newDesc)
-    }
-
-    override fun undo(workspace: WorkspaceItem): WorkspaceItem {
-        return workspace.copy(name = oldName, targetApp = oldApp, description = oldDesc)
-    }
+private class UpdateDetailsCommand(private val oldName: String, private val newName: String, private val oldApp: String, private val newApp: String, private val oldDesc: String, private val newDesc: String) : EditorCommand {
+    override fun execute(workspace: WorkspaceItem) = workspace.copy(name = newName, targetApp = newApp, description = newDesc)
+    override fun undo(workspace: WorkspaceItem) = workspace.copy(name = oldName, targetApp = oldApp, description = oldDesc)
 }

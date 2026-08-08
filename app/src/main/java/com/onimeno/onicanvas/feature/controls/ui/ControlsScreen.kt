@@ -58,7 +58,6 @@ import com.onimeno.onicanvas.feature.controls.viewmodel.ControlsViewModel
 @Composable
 fun ControlsScreen(modifier: Modifier = Modifier, viewModel: ControlsViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val spacing = LocalSpacing.current
     var selectedModuleForConfig by remember { mutableStateOf<ControlModule?>(null) }
     Scaffold(modifier = modifier.fillMaxSize(), topBar = {
         OniTopBar(title = "Controls Layout", actions = { IconButton(onClick = viewModel::loadControls) { Icon(Icons.Rounded.Tune, contentDescription = "Reload layouts", tint = MaterialTheme.colorScheme.primary) } })
@@ -96,11 +95,11 @@ fun ControlModuleCard(module: ControlModule, onClick: () -> Unit, modifier: Modi
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Box(Modifier.size(44.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) }
-                Spacer(Modifier.width(spacing.medium)); Column { Text(module.title, MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface); Spacer(Modifier.height(2.dp)); Text(module.description, MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Spacer(Modifier.width(spacing.medium)); Column { Text(module.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface); Spacer(Modifier.height(2.dp)); Text(module.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape).padding(horizontal = 8.dp, vertical = 2.dp)) { Text(module.activeState.uppercase(), MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
-                Text(module.lastSync, MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box(Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape).padding(horizontal = 8.dp, vertical = 2.dp)) { Text(module.activeState.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+                Text(module.lastSync, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -113,23 +112,23 @@ fun ControlConfigSimulatorDialog(module: ControlModule, onDismiss: () -> Unit, o
     var activeSubMode by remember { mutableStateOf(module.activeState) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Configure ${module.title}", fontWeight = FontWeight.Bold) }, text = {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("Simulating Live Input / Mapping controls:", MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text("Simulating Live Input / Mapping controls:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             when (module.id) {
                 "brush_controls" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Brush Size: ${sizeSliderVal.toInt()} px", MaterialTheme.typography.bodyMedium); Slider(value = sizeSliderVal, onValueChange = { sizeSliderVal = it }, valueRange = 1f..100f, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(4.dp)); Text("Brush Opacity: ${opacitySliderVal.toInt()}%", MaterialTheme.typography.bodyMedium); Slider(value = opacitySliderVal, onValueChange = { opacitySliderVal = it }, valueRange = 1f..100f, modifier = Modifier.fillMaxWidth())
+                    Text("Brush Size: ${sizeSliderVal.toInt()} px", style = MaterialTheme.typography.bodyMedium); Slider(value = sizeSliderVal, onValueChange = { sizeSliderVal = it }, valueRange = 1f..100f, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(4.dp)); Text("Brush Opacity: ${opacitySliderVal.toInt()}%", style = MaterialTheme.typography.bodyMedium); Slider(value = opacitySliderVal, onValueChange = { opacitySliderVal = it }, valueRange = 1f..100f, modifier = Modifier.fillMaxWidth())
                 }
                 "macro_pad" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Configure Button Layout", MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Configure Button Layout", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("Standard", "Advanced", "Color").forEach { mode ->
                         Box(Modifier.weight(1f).background(if (activeSubMode.contains(mode)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small).clickable { activeSubMode = "$mode Mode" }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) { Text(mode, color = if (activeSubMode.contains(mode)) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
                     } }
                 }
                 "gesture_pad" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Sensitivity Control", MaterialTheme.typography.bodyMedium); Slider(value = sizeSliderVal, onValueChange = { sizeSliderVal = it }, valueRange = 10f..100f)
+                    Text("Sensitivity Control", style = MaterialTheme.typography.bodyMedium); Slider(value = sizeSliderVal, onValueChange = { sizeSliderVal = it }, valueRange = 10f..100f)
                     OniButton(text = "Toggle Precision Lock", onClick = { activeSubMode = if (activeSubMode.contains("Lock ON")) "Precision Lock OFF" else "Precision Lock ON" }, isPrimary = true, modifier = Modifier.fillMaxWidth())
                 }
-                else -> Text("This module connects live parameters such as radial wheels or shortcuts. Live values sync seamlessly to Clip Studio Paint over local transport protocols.", MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else -> Text("This module connects live parameters such as radial wheels or shortcuts. Live values sync seamlessly to Clip Studio Paint over local transport protocols.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }, confirmButton = { TextButton(onClick = { onSaveState(activeSubMode) }) { Text("Save Layout") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })

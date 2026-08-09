@@ -2,18 +2,28 @@ package com.onimeno.onicanvas.feature.workspace.data
 
 import com.onimeno.onicanvas.feature.workspace.state.ControlModule
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class WorkspaceRepository(
     private val dao: WorkspaceDao
 ) {
 
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     val workspaces: Flow<List<WorkspaceItem>> = dao.observeAll().map { entities ->
         entities.map(WorkspaceEntity::toDomain)
     }
 
-    suspend fun ensureSeeded() {
+    init {
+        repositoryScope.launch { ensureSeeded() }
+    }
+
+    private suspend fun ensureSeeded() {
         if (dao.count() == 0) {
             dao.upsertAll(defaultWorkspaces().map(WorkspaceItem::toEntity))
         }

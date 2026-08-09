@@ -41,7 +41,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,7 +52,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.onimeno.onicanvas.OniCanvasApp
+import androidx.compose.ui.platform.LocalContext
 import com.onimeno.onicanvas.core.designsystem.components.OniButton
 import com.onimeno.onicanvas.core.designsystem.components.OniCard
 import com.onimeno.onicanvas.core.designsystem.components.OniEmptyState
@@ -66,13 +68,18 @@ import com.onimeno.onicanvas.feature.profiles.state.AppProfile
 import com.onimeno.onicanvas.feature.profiles.state.ProfilesUiState
 import com.onimeno.onicanvas.feature.profiles.state.UserProfile
 import com.onimeno.onicanvas.feature.profiles.viewmodel.ProfilesViewModel
+import com.onimeno.onicanvas.feature.profiles.viewmodel.ProfilesViewModelFactory
 
 @Composable
 fun ProfilesScreen(
-    modifier: Modifier = Modifier,
-    viewModel: ProfilesViewModel = viewModel()
+    modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val app = context.applicationContext as OniCanvasApp
+    val viewModel: ProfilesViewModel = viewModel(
+        factory = ProfilesViewModelFactory(app.container.profileRepository)
+    )
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val spacing = LocalSpacing.current
     var showCreateProfileDialog by remember { mutableStateOf(false) }
 
@@ -153,94 +160,37 @@ fun ProfilesContent(
         contentPadding = PaddingValues(spacing.medium),
         verticalArrangement = Arrangement.spacedBy(spacing.medium)
     ) {
-        // User Artist Metadata Info Row
-        item {
-            ArtistAccountCard(user = state.user)
-        }
-
-        item {
-            OniSectionHeader(title = "App Mapping Layouts")
-        }
-
+        item { ArtistAccountCard(user = state.user) }
+        item { OniSectionHeader(title = "App Mapping Layouts") }
         items(state.availableProfiles, key = { it.id }) { profile ->
-            AppProfileRowItem(
-                profile = profile,
-                onSelect = { onSelectProfile(profile.id) }
-            )
+            AppProfileRowItem(profile = profile, onSelect = { onSelectProfile(profile.id) })
         }
     }
 }
 
 @Composable
-fun ArtistAccountCard(
-    user: UserProfile,
-    modifier: Modifier = Modifier
-) {
+fun ArtistAccountCard(user: UserProfile, modifier: Modifier = Modifier) {
     val spacing = LocalSpacing.current
-
     OniCard(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Rounded Avatar container
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                        shape = CircleShape
-                    ),
+                modifier = Modifier.size(64.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Person,
-                    contentDescription = "User Avatar",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp)
-                )
+                Icon(Icons.Rounded.Person, contentDescription = "User Avatar", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
             }
-
             Spacer(modifier = Modifier.width(spacing.medium))
-
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = user.username,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Text(user.username, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Rounded.Star,
-                        contentDescription = "Pro level account",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(Icons.Rounded.Star, contentDescription = "Pro level account", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                 }
-                Text(
-                    text = user.artistTier,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(user.artistTier, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Sync,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = "${user.syncCount} synced sessions",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        fontWeight = FontWeight.Bold
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Rounded.Sync, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(12.dp))
+                    Text("${user.syncCount} synced sessions", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -248,11 +198,7 @@ fun ArtistAccountCard(
 }
 
 @Composable
-fun AppProfileRowItem(
-    profile: AppProfile,
-    onSelect: () -> Unit,
-    modifier: Modifier = Modifier
-) {
+fun AppProfileRowItem(profile: AppProfile, onSelect: () -> Unit, modifier: Modifier = Modifier) {
     val spacing = LocalSpacing.current
     val icon = when (profile.targetApp) {
         "Clip Studio Paint" -> Icons.Rounded.Brush
@@ -260,156 +206,59 @@ fun AppProfileRowItem(
         "Krita" -> Icons.Rounded.FolderSpecial
         else -> Icons.Rounded.Category
     }
-
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(GlassCardShape)
-            .background(
-                if (profile.isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-            )
-            .border(
-                width = 1.dp,
-                color = if (profile.isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent,
-                shape = GlassCardShape
-            )
-            .clickable(onClick = onSelect)
-            .padding(spacing.medium),
+        modifier = modifier.fillMaxWidth().clip(GlassCardShape)
+            .background(if (profile.isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            .border(1.dp, if (profile.isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent, GlassCardShape)
+            .clickable(onClick = onSelect).padding(spacing.medium),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Box(modifier = Modifier.size(38.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             }
             Spacer(modifier = Modifier.width(spacing.medium))
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = profile.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Text(profile.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     if (profile.isDefault) {
                         Spacer(modifier = Modifier.width(spacing.small))
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
-                                    shape = CircleShape
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "DEFAULT",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                fontWeight = FontWeight.Bold
-                            )
+                        Box(modifier = Modifier.background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f), CircleShape).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                            Text("DEFAULT", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = profile.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(profile.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${profile.layoutCount} LAYOUT MAPPINGS INCLUDED",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text("${profile.layoutCount} LAYOUT MAPPINGS INCLUDED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
             }
         }
-
-        Box(
-            modifier = Modifier
-                .background(
-                    color = if (profile.isActive) SuccessColor.copy(alpha = 0.15f)
-                    else MaterialTheme.colorScheme.surfaceVariant,
-                    shape = CircleShape
-                )
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            Text(
-                text = if (profile.isActive) "ACTIVE" else "SELECT",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (profile.isActive) SuccessColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Bold
-            )
+        Box(modifier = Modifier.background(if (profile.isActive) SuccessColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Text(if (profile.isActive) "ACTIVE" else "SELECT", style = MaterialTheme.typography.labelSmall, color = if (profile.isActive) SuccessColor else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-fun CreateProfileDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (name: String, app: String, desc: String) -> Unit
-) {
+fun CreateProfileDialog(onDismiss: () -> Unit, onConfirm: (name: String, app: String, desc: String) -> Unit) {
     var name by remember { mutableStateOf("") }
     var appTarget by remember { mutableStateOf("Photoshop") }
     var description by remember { mutableStateOf("") }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("New Mapping Profile", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Profile Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = appTarget,
-                    onValueChange = { appTarget = it },
-                    label = { Text("Desktop Software App") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Profile Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = appTarget, onValueChange = { appTarget = it }, label = { Text("Desktop Software App") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth())
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = { if (name.isNotBlank()) onConfirm(name, appTarget, description) },
-                enabled = name.isNotBlank()
-            ) {
-                Text("Save")
-            }
+            TextButton(onClick = { if (name.isNotBlank()) onConfirm(name, appTarget, description) }, enabled = name.isNotBlank()) { Text("Save") }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

@@ -3,6 +3,8 @@ package com.onimeno.onicanvas.feature.connection.data
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -19,9 +21,8 @@ import java.net.Socket
  * Messages are UTF-8 text frames terminated by a newline. The actual
  * oniCanvas companion protocol can define its message format later.
  */
-class ConnectionTransport(
-    private val scope: CoroutineScope
-) {
+class ConnectionTransport {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var socket: Socket? = null
     private var writer: BufferedWriter? = null
     private var readerJob: Job? = null
@@ -30,12 +31,12 @@ class ConnectionTransport(
     val incomingMessages: SharedFlow<String> = _incomingMessages.asSharedFlow()
 
     fun attach(socket: Socket) {
-        close()
+        closeSocketOnly()
         this.socket = socket
         writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream(), Charsets.UTF_8))
 
         val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
-        readerJob = scope.launch(Dispatchers.IO) {
+        readerJob = scope.launch {
             try {
                 while (!socket.isClosed) {
                     val line = reader.readLine() ?: break
@@ -62,6 +63,11 @@ class ConnectionTransport(
     }
 
     fun close() {
+        closeSocketOnly()
+        scope.cancel()
+    }
+
+    private fun closeSocketOnly() {
         readerJob?.cancel()
         readerJob = null
         writer?.close()

@@ -50,10 +50,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.onimeno.onicanvas.OniCanvasApp
 import com.onimeno.onicanvas.core.designsystem.components.OniButton
 import com.onimeno.onicanvas.core.designsystem.components.OniCard
 import com.onimeno.onicanvas.core.designsystem.components.OniEmptyState
@@ -66,13 +69,18 @@ import com.onimeno.onicanvas.feature.profiles.state.AppProfile
 import com.onimeno.onicanvas.feature.profiles.state.ProfilesUiState
 import com.onimeno.onicanvas.feature.profiles.state.UserProfile
 import com.onimeno.onicanvas.feature.profiles.viewmodel.ProfilesViewModel
+import com.onimeno.onicanvas.feature.profiles.viewmodel.ProfilesViewModelFactory
 
 @Composable
 fun ProfilesScreen(
-    modifier: Modifier = Modifier,
-    viewModel: ProfilesViewModel = viewModel()
+    modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val app = context.applicationContext as OniCanvasApp
+    val viewModel: ProfilesViewModel = viewModel(
+        factory = ProfilesViewModelFactory(app.container.profileRepository)
+    )
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val spacing = LocalSpacing.current
     var showCreateProfileDialog by remember { mutableStateOf(false) }
 

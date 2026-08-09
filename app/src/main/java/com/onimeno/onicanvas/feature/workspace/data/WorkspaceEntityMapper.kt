@@ -2,6 +2,8 @@ package com.onimeno.onicanvas.feature.workspace.data
 
 import com.onimeno.onicanvas.feature.workspace.state.ControlModule
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private val workspaceJson = Json { ignoreUnknownKeys = true }

@@ -3,10 +3,13 @@ package com.onimeno.onicanvas.feature.connection.data
 import com.onimeno.onicanvas.core.designsystem.components.OniStatus
 import com.onimeno.onicanvas.feature.connection.state.ConnectionHost
 import com.onimeno.onicanvas.feature.connection.state.ConnectionLog
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -21,7 +24,9 @@ data class ConnectionSnapshot(
     val connectionLogs: List<ConnectionLog>
 )
 
-class ConnectionRepository {
+class ConnectionRepository(
+    private val connectionProbe: ConnectionProbe = ConnectionProbe()
+) {
     private val pairedHosts = listOf(
         ConnectionHost("studio_pc", "Studio-PC", "192.168.1.142", "10 mins ago", isAvailable = true),
         ConnectionHost("office_laptop", "Office-MacBook", "192.168.1.201", "Yesterday", isAvailable = false)
@@ -34,13 +39,14 @@ class ConnectionRepository {
     )
 
     private val logs = mutableListOf<ConnectionLog>()
+    private var activeSocket: Socket? = null
 
     private val _state = MutableStateFlow(
         ConnectionSnapshot(
-            status = OniStatus.SUCCESS,
-            hostIp = "192.168.1.142",
-            transportType = "Wi-Fi (5 GHz)",
-            activeHostName = "Studio-PC",
+            status = OniStatus.OFFLINE,
+            hostIp = "—",
+            transportType = "—",
+            activeHostName = null,
             pairedHosts = pairedHosts,
             discoveredHosts = discoveredHosts,
             connectionLogs = emptyList()
@@ -49,48 +55,54 @@ class ConnectionRepository {
     val state: StateFlow<ConnectionSnapshot> = _state.asStateFlow()
 
     init {
-        addLog("Searching local network interfaces...", "INFO")
-        addLog("Found gateway 192.168.1.1. Resolving hosts...", "INFO")
-        addLog("Connection handshaking initiated with Studio-PC...", "INFO")
-        addLog("WebSocket handshaking successful on port 8085", "SUCCESS")
-        addLog("Synchronized layout config [Illustration Master]", "SUCCESS")
-        addLog("Established low-latency TCP channel (Ping: 8ms)", "SUCCESS")
+        addLog("Ready to connect to companion", "INFO")
         publish()
     }
 
     suspend fun disconnect() {
-        delay(200)
-        addLog("Disconnect signal sent by client", "WARNING")
-        addLog("TCP stream closed successfully", "INFO")
-        addLog("Disconnected from host", "ERROR")
+        withContext(Dispatchers.IO) {
+            activeSocket?.close()
+            activeSocket = null
+        }
+        addLog("Disconnected from host", "INFO")
         publish(status = OniStatus.OFFLINE, activeHostName = null, hostIp = "—", transportType = "—")
     }
 
     suspend fun connectToHost(hostId: String) {
-        delay(500)
         val host = discoveredHosts.firstOrNull { it.id == hostId }
             ?: pairedHosts.firstOrNull { it.id == hostId }
-        if (host != null) {
-            addLog("Initiating connection to ${host.name} (${host.ipAddress})...", "INFO")
-            addLog("Shaking hands via companion websocket...", "INFO")
-            addLog("Connected to host machine: ${host.name}", "SUCCESS")
-            addLog("Synchronized macros & configurations", "SUCCESS")
-            publish(
-                status = OniStatus.SUCCESS,
-                activeHostName = host.name,
-                hostIp = host.ipAddress,
-                transportType = "Wi-Fi (5 GHz)"
-            )
-        } else {
+
+        if (host == null) {
             addLog("Error: Host ID not found", "ERROR")
             publish(status = OniStatus.OFFLINE, activeHostName = null, hostIp = "—", transportType = "—")
+            return
+        }
+
+        addLog("Connecting to ${host.name} (${host.ipAddress}) on TCP port 8085...", "INFO")
+
+        when (val result = connectionProbe.connect(host.ipAddress)) {
+            is ConnectionProbe.ProbeResult.Success -> {
+                activeSocket = result.socket
+                addLog("TCP connection established with ${host.name}", "SUCCESS")
+                addLog("Connection latency: ${result.latencyMs}ms", "SUCCESS")
+                publish(
+                    status = OniStatus.SUCCESS,
+                    activeHostName = host.name,
+                    hostIp = host.ipAddress,
+                    transportType = "TCP"
+                )
+            }
+
+            is ConnectionProbe.ProbeResult.Failure -> {
+                activeSocket = null
+                addLog("Connection failed: ${result.reason}", "ERROR")
+                publish(status = OniStatus.OFFLINE, activeHostName = null, hostIp = "—", transportType = "—")
+            }
         }
     }
 
     suspend fun scanNetwork() {
-        addLog("Scanning local network subnets...", "INFO")
-        delay(300)
-        addLog("Discovered 3 available nodes", "INFO")
+        addLog("Network discovery is not implemented yet", "INFO")
         publish()
     }
 

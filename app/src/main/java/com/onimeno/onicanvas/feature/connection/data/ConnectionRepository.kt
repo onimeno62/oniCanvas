@@ -5,14 +5,19 @@ import com.onimeno.onicanvas.feature.connection.state.ConnectionHost
 import com.onimeno.onicanvas.feature.connection.state.ConnectionLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.net.Socket
 
 data class ConnectionSnapshot(
     val status: OniStatus,
@@ -40,6 +45,9 @@ class ConnectionRepository(
 
     private val logs = mutableListOf<ConnectionLog>()
     private var activeSocket: Socket? = null
+    private val transport = ConnectionTransport()
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val incomingMessages: SharedFlow<String> = transport.incomingMessages
 
     private val _state = MutableStateFlow(
         ConnectionSnapshot(
@@ -56,12 +64,20 @@ class ConnectionRepository(
 
     init {
         addLog("Ready to connect to companion", "INFO")
+        repositoryScope.launch {
+            transport.incomingMessages
+                .catch { exception -> addLog("Receive error: ${exception.message}", "ERROR"); publish() }
+                .collect { message ->
+                    addLog("RX: $message", "INFO")
+                    publish()
+                }
+        }
         publish()
     }
 
     suspend fun disconnect() {
         withContext(Dispatchers.IO) {
-            activeSocket?.close()
+            transport.close()
             activeSocket = null
         }
         addLog("Disconnected from host", "INFO")
@@ -83,6 +99,7 @@ class ConnectionRepository(
         when (val result = connectionProbe.connect(host.ipAddress)) {
             is ConnectionProbe.ProbeResult.Success -> {
                 activeSocket = result.socket
+                transport.attach(result.socket)
                 addLog("TCP connection established with ${host.name}", "SUCCESS")
                 addLog("Connection latency: ${result.latencyMs}ms", "SUCCESS")
                 publish(
@@ -101,6 +118,13 @@ class ConnectionRepository(
         }
     }
 
+    suspend fun sendMessage(message: String): Boolean {
+        val sent = transport.send(message)
+        addLog(if (sent) "TX: $message" else "Send failed: $message", if (sent) "INFO" else "ERROR")
+        publish()
+        return sent
+    }
+
     suspend fun scanNetwork() {
         addLog("Network discovery is not implemented yet", "INFO")
         publish()
@@ -110,6 +134,12 @@ class ConnectionRepository(
         logs.clear()
         addLog("Logs cleared", "INFO")
         publish()
+    }
+
+    fun close() {
+        transport.close()
+        repositoryScope.cancel()
+        activeSocket = null
     }
 
     private fun addLog(message: String, level: String) {

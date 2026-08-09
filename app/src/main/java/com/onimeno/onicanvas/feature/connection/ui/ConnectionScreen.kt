@@ -1,6 +1,5 @@
 package com.onimeno.onicanvas.feature.connection.ui
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,15 +19,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SignalCellularAlt
-import androidx.compose.material.icons.rounded.Terminal
-import androidx.compose.material.icons.rounded.Usb
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -38,7 +33,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +43,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.onimeno.onicanvas.core.designsystem.components.OniButton
 import com.onimeno.onicanvas.core.designsystem.components.OniCard
 import com.onimeno.onicanvas.core.designsystem.components.OniEmptyState
@@ -69,11 +63,10 @@ import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModel
 
 @Composable
 fun ConnectionScreen(
-    modifier: Modifier = Modifier,
-    viewModel: ConnectionViewModel = viewModel()
+    viewModel: ConnectionViewModel,
+    modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val spacing = LocalSpacing.current
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -82,7 +75,7 @@ fun ConnectionScreen(
                 title = "Link Connection",
                 actions = {
                     IconButton(
-                        onClick = { viewModel.scanNetwork() },
+                        onClick = viewModel::scanNetwork,
                         modifier = Modifier.testTag("scan_network_btn")
                     ) {
                         Icon(
@@ -110,9 +103,9 @@ fun ConnectionScreen(
                 is ConnectionUiState.Success -> {
                     ConnectionContent(
                         state = state,
-                        onConnect = { viewModel.connectToHost(it) },
-                        onDisconnect = { viewModel.disconnect() },
-                        onClearLogs = { viewModel.clearLogs() }
+                        onConnect = viewModel::connectToHost,
+                        onDisconnect = viewModel::disconnect,
+                        onClearLogs = viewModel::clearLogs
                     )
                 }
                 is ConnectionUiState.Error -> {
@@ -121,7 +114,7 @@ fun ConnectionScreen(
                         description = state.message,
                         icon = Icons.Rounded.Wifi,
                         actionText = "Retry",
-                        onActionClick = { viewModel.scanNetwork() }
+                        onActionClick = viewModel::scanNetwork
                     )
                 }
             }
@@ -140,13 +133,10 @@ fun ConnectionContent(
     val spacing = LocalSpacing.current
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag("connection_screen_container"),
+        modifier = modifier.fillMaxSize().testTag("connection_screen_container"),
         contentPadding = PaddingValues(spacing.medium),
         verticalArrangement = Arrangement.spacedBy(spacing.medium)
     ) {
-        // Active Connection Info Card
         item {
             ActiveConnectionCard(
                 state = state,
@@ -155,10 +145,7 @@ fun ConnectionContent(
             )
         }
 
-        // Discovery List
-        item {
-            OniSectionHeader(title = "Discovered PCs (Local Network)")
-        }
+        item { OniSectionHeader(title = "Discovered PCs (Local Network)") }
 
         if (state.discoveredHosts.isEmpty()) {
             item {
@@ -179,7 +166,6 @@ fun ConnectionContent(
             }
         }
 
-        // Live Log Terminal Console
         item {
             OniSectionHeader(
                 title = "Link Connection Logs",
@@ -196,9 +182,7 @@ fun ConnectionContent(
             )
         }
 
-        item {
-            LogTerminalConsole(logs = state.connectionLogs)
-        }
+        item { LogTerminalConsole(logs = state.connectionLogs) }
     }
 }
 
@@ -324,17 +308,11 @@ fun HostRowItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
-                        shape = CircleShape
-                    ),
+                    .background(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f), shape = CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -363,8 +341,7 @@ fun HostRowItem(
         Box(
             modifier = Modifier
                 .background(
-                    color = if (isActive) SuccessColor.copy(alpha = 0.15f)
-                    else MaterialTheme.colorScheme.surfaceVariant,
+                    color = if (isActive) SuccessColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
                     shape = CircleShape
                 )
                 .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -414,10 +391,7 @@ fun LogTerminalConsole(
                         "ERROR" -> ErrorColor
                         else -> Color(0xFF8E929E)
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                         Text(
                             text = "[${log.timestamp}] ",
                             color = Color(0xFF4C505B),

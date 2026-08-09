@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -32,6 +33,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.onimeno.onicanvas.feature.about.ui.AboutScreen
 import com.onimeno.onicanvas.feature.connection.ui.ConnectionScreen
+import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModel
+import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModelFactory
 import com.onimeno.onicanvas.feature.controls.ui.ControlsScreen
 import com.onimeno.onicanvas.feature.dashboard.ui.DashboardScreen
 import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModel
@@ -106,7 +109,13 @@ fun OniApp() {
                     WorkspaceEditorRouteScreen(workspaceId = route.workspaceId, onBackClick = { navController.popBackStack() })
                 }
                 composable<ControlsRoute> { ControlsScreen() }
-                composable<ConnectionRoute> { ConnectionScreen() }
+                composable<ConnectionRoute> {
+                    val app = LocalContext.current.applicationContext as OniCanvasApp
+                    val viewModel: ConnectionViewModel = viewModel(
+                        factory = ConnectionViewModelFactory(app.container.connectionRepository)
+                    )
+                    ConnectionScreen(viewModel = viewModel)
+                }
                 composable<ProfilesRoute> { ProfilesScreen() }
                 composable<SettingsRoute> { SettingsScreen(onBackClick = { navController.popBackStack() }) }
                 composable<AboutRoute> { AboutScreen(onBackClick = { navController.popBackStack() }) }

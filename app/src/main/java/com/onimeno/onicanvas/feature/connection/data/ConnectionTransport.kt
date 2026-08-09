@@ -62,7 +62,13 @@ class ConnectionTransport {
         }
     }
 
+    /** Closes only the active network connection; the transport can reconnect later. */
     fun close() {
+        closeSocketOnly()
+    }
+
+    /** Permanently stops the transport's coroutine scope. */
+    fun shutdown() {
         closeSocketOnly()
         scope.cancel()
     }

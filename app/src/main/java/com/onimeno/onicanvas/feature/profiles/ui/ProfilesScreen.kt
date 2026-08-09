@@ -41,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,13 +50,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.onimeno.onicanvas.OniCanvasApp
-import androidx.compose.ui.platform.LocalContext
 import com.onimeno.onicanvas.core.designsystem.components.OniButton
 import com.onimeno.onicanvas.core.designsystem.components.OniCard
 import com.onimeno.onicanvas.core.designsystem.components.OniEmptyState
@@ -160,37 +161,94 @@ fun ProfilesContent(
         contentPadding = PaddingValues(spacing.medium),
         verticalArrangement = Arrangement.spacedBy(spacing.medium)
     ) {
-        item { ArtistAccountCard(user = state.user) }
-        item { OniSectionHeader(title = "App Mapping Layouts") }
+        // User Artist Metadata Info Row
+        item {
+            ArtistAccountCard(user = state.user)
+        }
+
+        item {
+            OniSectionHeader(title = "App Mapping Layouts")
+        }
+
         items(state.availableProfiles, key = { it.id }) { profile ->
-            AppProfileRowItem(profile = profile, onSelect = { onSelectProfile(profile.id) })
+            AppProfileRowItem(
+                profile = profile,
+                onSelect = { onSelectProfile(profile.id) }
+            )
         }
     }
 }
 
 @Composable
-fun ArtistAccountCard(user: UserProfile, modifier: Modifier = Modifier) {
+fun ArtistAccountCard(
+    user: UserProfile,
+    modifier: Modifier = Modifier
+) {
     val spacing = LocalSpacing.current
+
     OniCard(modifier = modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Rounded Avatar container
             Box(
-                modifier = Modifier.size(64.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape),
+                modifier = Modifier
+                    .size(64.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        shape = CircleShape
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.Person, contentDescription = "User Avatar", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                Icon(
+                    imageVector = Icons.Rounded.Person,
+                    contentDescription = "User Avatar",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
             }
+
             Spacer(modifier = Modifier.width(spacing.medium))
+
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(user.username, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        text = user.username,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Icon(Icons.Rounded.Star, contentDescription = "Pro level account", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Icon(
+                        imageVector = Icons.Rounded.Star,
+                        contentDescription = "Pro level account",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
-                Text(user.artistTier, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = user.artistTier,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Rounded.Sync, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(12.dp))
-                    Text("${user.syncCount} synced sessions", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Sync,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = "${user.syncCount} synced sessions",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -198,7 +256,11 @@ fun ArtistAccountCard(user: UserProfile, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun AppProfileRowItem(profile: AppProfile, onSelect: () -> Unit, modifier: Modifier = Modifier) {
+fun AppProfileRowItem(
+    profile: AppProfile,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val spacing = LocalSpacing.current
     val icon = when (profile.targetApp) {
         "Clip Studio Paint" -> Icons.Rounded.Brush
@@ -206,59 +268,156 @@ fun AppProfileRowItem(profile: AppProfile, onSelect: () -> Unit, modifier: Modif
         "Krita" -> Icons.Rounded.FolderSpecial
         else -> Icons.Rounded.Category
     }
+
     Row(
-        modifier = modifier.fillMaxWidth().clip(GlassCardShape)
-            .background(if (profile.isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-            .border(1.dp, if (profile.isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent, GlassCardShape)
-            .clickable(onClick = onSelect).padding(spacing.medium),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(GlassCardShape)
+            .background(
+                if (profile.isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+            )
+            .border(
+                width = 1.dp,
+                color = if (profile.isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent,
+                shape = GlassCardShape
+            )
+            .clickable(onClick = onSelect)
+            .padding(spacing.medium),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            Box(modifier = Modifier.size(38.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
             }
             Spacer(modifier = Modifier.width(spacing.medium))
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(profile.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        text = profile.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     if (profile.isDefault) {
                         Spacer(modifier = Modifier.width(spacing.small))
-                        Box(modifier = Modifier.background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f), CircleShape).padding(horizontal = 6.dp, vertical = 2.dp)) {
-                            Text("DEFAULT", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                                    shape = CircleShape
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "DEFAULT",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(profile.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = profile.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(modifier = Modifier.height(2.dp))
-                Text("${profile.layoutCount} LAYOUT MAPPINGS INCLUDED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = "${profile.layoutCount} LAYOUT MAPPINGS INCLUDED",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
-        Box(modifier = Modifier.background(if (profile.isActive) SuccessColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp)) {
-            Text(if (profile.isActive) "ACTIVE" else "SELECT", style = MaterialTheme.typography.labelSmall, color = if (profile.isActive) SuccessColor else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+
+        Box(
+            modifier = Modifier
+                .background(
+                    color = if (profile.isActive) SuccessColor.copy(alpha = 0.15f)
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = CircleShape
+                )
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = if (profile.isActive) "ACTIVE" else "SELECT",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (profile.isActive) SuccessColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
 
 @Composable
-fun CreateProfileDialog(onDismiss: () -> Unit, onConfirm: (name: String, app: String, desc: String) -> Unit) {
+fun CreateProfileDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, app: String, desc: String) -> Unit
+) {
     var name by remember { mutableStateOf("") }
     var appTarget by remember { mutableStateOf("Photoshop") }
     var description by remember { mutableStateOf("") }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("New Mapping Profile", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Profile Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = appTarget, onValueChange = { appTarget = it }, label = { Text("Desktop Software App") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Profile Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = appTarget,
+                    onValueChange = { appTarget = it },
+                    label = { Text("Desktop Software App") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description") },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (name.isNotBlank()) onConfirm(name, appTarget, description) }, enabled = name.isNotBlank()) { Text("Save") }
+            TextButton(
+                onClick = { if (name.isNotBlank()) onConfirm(name, appTarget, description) },
+                enabled = name.isNotBlank()
+            ) {
+                Text("Save")
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
     )
 }

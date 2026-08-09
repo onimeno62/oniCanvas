@@ -2,9 +2,7 @@ package com.onimeno.onicanvas.feature.dashboard.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.onimeno.onicanvas.core.designsystem.components.OniStatus
 import com.onimeno.onicanvas.feature.dashboard.data.DashboardRepository
-import com.onimeno.onicanvas.feature.dashboard.data.FakeDashboardRepository
 import com.onimeno.onicanvas.feature.dashboard.state.DashboardUiState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +12,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 class DashboardViewModel(
-    private val repository: DashboardRepository = FakeDashboardRepository()
+    private val repository: DashboardRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DashboardUiState>(DashboardUiState.Loading)
@@ -49,4 +47,3 @@ class DashboardViewModel(
         }
     }
 }
-

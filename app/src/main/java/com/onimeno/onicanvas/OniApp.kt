@@ -38,6 +38,7 @@ import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModelFac
 import com.onimeno.onicanvas.feature.controls.ui.ControlsScreen
 import com.onimeno.onicanvas.feature.dashboard.ui.DashboardScreen
 import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModel
+import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModelFactory
 import com.onimeno.onicanvas.feature.profiles.ui.ProfilesScreen
 import com.onimeno.onicanvas.feature.settings.ui.SettingsScreen
 import com.onimeno.onicanvas.feature.workspace.ui.WorkspaceEditorRoute as WorkspaceEditorRouteScreen
@@ -93,7 +94,10 @@ fun OniApp() {
         Surface(Modifier.fillMaxSize().padding(innerPadding), color = MaterialTheme.colorScheme.background) {
             NavHost(navController = navController, startDestination = DashboardRoute) {
                 composable<DashboardRoute> {
-                    val viewModel: DashboardViewModel = viewModel()
+                    val app = LocalContext.current.applicationContext as OniCanvasApp
+                    val viewModel: DashboardViewModel = viewModel(
+                        factory = DashboardViewModelFactory(app.container.dashboardRepository)
+                    )
                     DashboardScreen(
                         viewModel = viewModel,
                         onNavigateToConnection = { navController.navigate(ConnectionRoute) },

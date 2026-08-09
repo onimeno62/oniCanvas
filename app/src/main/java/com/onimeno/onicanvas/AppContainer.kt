@@ -8,6 +8,8 @@ import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.onimeno.onicanvas.feature.connection.data.ConnectionRepository
+import com.onimeno.onicanvas.feature.dashboard.data.DashboardRepository
+import com.onimeno.onicanvas.feature.dashboard.data.FakeDashboardRepository
 import com.onimeno.onicanvas.feature.profiles.data.ProfileRepository
 import com.onimeno.onicanvas.feature.settings.data.SettingsRepository
 import com.onimeno.onicanvas.feature.workspace.data.OniDatabase
@@ -61,4 +63,6 @@ class AppContainer(
     )
 
     val connectionRepository: ConnectionRepository = ConnectionRepository()
+
+    val dashboardRepository: DashboardRepository = FakeDashboardRepository()
 }

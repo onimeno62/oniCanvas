@@ -3,8 +3,8 @@ package com.onimeno.onicanvas.feature.profiles.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.onimeno.onicanvas.feature.profiles.data.ProfileRepository
-import com.onimeno.onicanvas.feature.profiles.state.UserProfile
 import com.onimeno.onicanvas.feature.profiles.state.ProfilesUiState
+import com.onimeno.onicanvas.feature.profiles.state.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +25,7 @@ class ProfilesViewModel(
     }
 
     fun loadProfiles() {
-        observeProfiles()
+        _uiState.value = ProfilesUiState.Loading
     }
 
     fun selectProfile(id: String) {

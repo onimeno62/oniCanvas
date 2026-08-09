@@ -32,6 +32,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.onimeno.onicanvas.feature.about.ui.AboutScreen
 import com.onimeno.onicanvas.feature.connection.ui.ConnectionScreen
+import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModel
+import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModelFactory
 import com.onimeno.onicanvas.feature.controls.ui.ControlsScreen
 import com.onimeno.onicanvas.feature.dashboard.ui.DashboardScreen
 import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModel
@@ -106,7 +108,14 @@ fun OniApp() {
                     WorkspaceEditorRouteScreen(workspaceId = route.workspaceId, onBackClick = { navController.popBackStack() })
                 }
                 composable<ControlsRoute> { ControlsScreen() }
-                composable<ConnectionRoute> { ConnectionScreen() }
+                composable<ConnectionRoute> {
+                    val viewModel: ConnectionViewModel = viewModel(
+                        factory = ConnectionViewModelFactory(
+                            (navController.context.applicationContext as OniCanvasApp).container.connectionRepository
+                        )
+                    )
+                    ConnectionScreen(viewModel = viewModel)
+                }
                 composable<ProfilesRoute> { ProfilesScreen() }
                 composable<SettingsRoute> { SettingsScreen(onBackClick = { navController.popBackStack() }) }
                 composable<AboutRoute> { AboutScreen(onBackClick = { navController.popBackStack() }) }

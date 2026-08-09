@@ -7,6 +7,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.onimeno.onicanvas.feature.connection.data.ConnectionRepository
 import com.onimeno.onicanvas.feature.profiles.data.ProfileRepository
 import com.onimeno.onicanvas.feature.settings.data.SettingsRepository
 import com.onimeno.onicanvas.feature.workspace.data.OniDatabase
@@ -58,4 +59,6 @@ class AppContainer(
     val settingsRepository: SettingsRepository = SettingsRepository(
         applicationContext.dataStore
     )
+
+    val connectionRepository: ConnectionRepository = ConnectionRepository()
 }

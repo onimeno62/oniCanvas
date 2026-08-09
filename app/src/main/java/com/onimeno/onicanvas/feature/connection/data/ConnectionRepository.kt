@@ -3,21 +3,21 @@ package com.onimeno.onicanvas.feature.connection.data
 import com.onimeno.onicanvas.core.designsystem.components.OniStatus
 import com.onimeno.onicanvas.feature.connection.state.ConnectionHost
 import com.onimeno.onicanvas.feature.connection.state.ConnectionLog
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
+import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.net.Socket
 
 data class ConnectionSnapshot(
     val status: OniStatus,
@@ -66,7 +66,10 @@ class ConnectionRepository(
         addLog("Ready to connect to companion", "INFO")
         repositoryScope.launch {
             transport.incomingMessages
-                .catch { exception -> addLog("Receive error: ${exception.message}", "ERROR"); publish() }
+                .catch { exception ->
+                    addLog("Receive error: ${exception.message}", "ERROR")
+                    publish()
+                }
                 .collect { message ->
                     addLog("RX: $message", "INFO")
                     publish()
@@ -137,7 +140,7 @@ class ConnectionRepository(
     }
 
     fun close() {
-        transport.close()
+        transport.shutdown()
         repositoryScope.cancel()
         activeSocket = null
     }

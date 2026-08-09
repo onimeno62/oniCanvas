@@ -2,23 +2,24 @@ package com.onimeno.onicanvas.feature.settings.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.onimeno.onicanvas.feature.settings.data.SettingsRepository
 import com.onimeno.onicanvas.feature.settings.state.SettingsData
 import com.onimeno.onicanvas.feature.settings.state.SettingsUiState
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.catch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class SettingsViewModel : ViewModel() {
+class SettingsViewModel(private val repository: SettingsRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow<SettingsUiState>(SettingsUiState.Loading)
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
-    private var currentSettings = SettingsData(
+    private var lastSettings = SettingsData(
         darkTheme = true,
         dynamicColor = true,
         tabletMode = false,
@@ -35,51 +36,58 @@ class SettingsViewModel : ViewModel() {
     fun loadSettings() {
         viewModelScope.launch {
             _uiState.value = SettingsUiState.Loading
-            delay(200)
-            _uiState.value = SettingsUiState.Success(currentSettings)
+            repository.settingsFlow
+                .catch { exception ->
+                    _uiState.value = SettingsUiState.Error(exception.message ?: "Unknown error")
+                }
+                .collect { settings ->
+                    lastSettings = settings
+                    _uiState.value = SettingsUiState.Success(settings)
+                }
         }
     }
 
     fun toggleDarkTheme() {
-        currentSettings = currentSettings.copy(darkTheme = !currentSettings.darkTheme)
-        updateState()
+        viewModelScope.launch {
+            repository.updateDarkTheme(!lastSettings.darkTheme)
+        }
     }
 
     fun toggleDynamicColor() {
-        currentSettings = currentSettings.copy(dynamicColor = !currentSettings.dynamicColor)
-        updateState()
+        viewModelScope.launch {
+            repository.updateDynamicColor(!lastSettings.dynamicColor)
+        }
     }
 
     fun toggleTabletMode() {
-        currentSettings = currentSettings.copy(tabletMode = !currentSettings.tabletMode)
-        updateState()
+        viewModelScope.launch {
+            repository.updateTabletMode(!lastSettings.tabletMode)
+        }
     }
 
     fun toggleAutoConnect() {
-        currentSettings = currentSettings.copy(autoConnect = !currentSettings.autoConnect)
-        updateState()
+        viewModelScope.launch {
+            repository.updateAutoConnect(!lastSettings.autoConnect)
+        }
     }
 
     fun toggleAnimations() {
-        currentSettings = currentSettings.copy(animationsEnabled = !currentSettings.animationsEnabled)
-        updateState()
+        viewModelScope.launch {
+            repository.updateAnimationsEnabled(!lastSettings.animationsEnabled)
+        }
     }
 
     fun changeLanguage(newLang: String) {
-        currentSettings = currentSettings.copy(language = newLang)
-        updateState()
+        viewModelScope.launch {
+            repository.updateLanguage(newLang)
+        }
     }
 
     fun performBackup() {
         viewModelScope.launch {
             val sdf = SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault())
             val formattedDate = sdf.format(Date())
-            currentSettings = currentSettings.copy(lastBackupDate = formattedDate)
-            updateState()
+            repository.updateLastBackupDate(formattedDate)
         }
-    }
-
-    private fun updateState() {
-        _uiState.value = SettingsUiState.Success(currentSettings)
     }
 }

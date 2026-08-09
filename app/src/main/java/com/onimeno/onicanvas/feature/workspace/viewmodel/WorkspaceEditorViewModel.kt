@@ -65,24 +65,29 @@ class WorkspaceEditorViewModel(
         executeCommand(UpdateDetailsCommand(editing.name, name, editing.targetApp, targetApp, editing.description, description))
     }
 
-    fun toggleFavorite() {
-        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+    fun toggleFavorite() = viewModelScope.launch {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return@launch
         val updated = state.editingWorkspace.copy(isFavorite = !state.editingWorkspace.isFavorite)
         repository.saveWorkspace(updated)
-        _uiState.value = state.copy(originalWorkspace = if (!state.isDirty) updated else state.originalWorkspace, editingWorkspace = updated)
+        _uiState.value = state.copy(
+            originalWorkspace = if (!state.isDirty) updated else state.originalWorkspace,
+            editingWorkspace = updated
+        )
     }
 
-    fun save() {
-        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+    fun save() = viewModelScope.launch {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return@launch
         val saved = state.editingWorkspace.copy(lastUsed = "Just edited")
         repository.saveWorkspace(saved); undoStack.clear(); redoStack.clear()
         _uiState.value = state.copy(originalWorkspace = saved, editingWorkspace = saved, isDirty = false, canUndo = false, canRedo = false)
     }
 
-    fun saveAs(newName: String) {
-        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+    fun saveAs(newName: String) = viewModelScope.launch {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return@launch
         val newWorkspace = state.editingWorkspace.copy(id = "custom_${System.currentTimeMillis()}", name = newName, isFavorite = false, lastUsed = "Just created")
-        repository.saveWorkspace(newWorkspace); loadWorkspace(newWorkspace.id)
+        repository.saveWorkspace(newWorkspace)
+        undoStack.clear(); redoStack.clear()
+        _uiState.value = WorkspaceEditorUiState.Success(newWorkspace, newWorkspace, false, false, false)
     }
 
     fun revert() {
@@ -91,14 +96,18 @@ class WorkspaceEditorViewModel(
         _uiState.value = state.copy(editingWorkspace = state.originalWorkspace, isDirty = false, canUndo = false, canRedo = false)
     }
 
-    fun duplicate() {
-        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        repository.duplicateWorkspace(state.originalWorkspace.id, "${state.originalWorkspace.name} (Copy)")?.let { loadWorkspace(it.id) }
+    fun duplicate() = viewModelScope.launch {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return@launch
+        repository.duplicateWorkspace(state.originalWorkspace.id, "${state.originalWorkspace.name} (Copy)")?.let {
+            undoStack.clear(); redoStack.clear()
+            _uiState.value = WorkspaceEditorUiState.Success(it, it, false, false, false)
+        }
     }
 
-    fun delete(onDeleted: () -> Unit) {
-        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
-        repository.deleteWorkspace(state.originalWorkspace.id); onDeleted()
+    fun delete(onDeleted: () -> Unit) = viewModelScope.launch {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return@launch
+        repository.deleteWorkspace(state.originalWorkspace.id)
+        onDeleted()
     }
 
     fun showRenameDialog(show: Boolean) { updateDialogState { it.copy(showRenameDialog = show) } }

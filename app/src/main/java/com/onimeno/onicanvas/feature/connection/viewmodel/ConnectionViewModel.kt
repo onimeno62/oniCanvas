@@ -30,9 +30,13 @@ class ConnectionViewModel(
                 .collect { snapshot ->
                     _uiState.value = ConnectionUiState.Success(
                         status = snapshot.status,
+                        phase = snapshot.phase,
                         hostIp = snapshot.hostIp,
+                        hostPort = snapshot.hostPort,
                         transportType = snapshot.transportType,
                         activeHostName = snapshot.activeHostName,
+                        latencyMs = snapshot.latencyMs,
+                        reconnectAttempt = snapshot.reconnectAttempt,
                         pairedHosts = snapshot.pairedHosts,
                         discoveredHosts = snapshot.discoveredHosts,
                         connectionLogs = snapshot.connectionLogs
@@ -41,26 +45,15 @@ class ConnectionViewModel(
         }
     }
 
-    fun disconnect() {
-        runConnectionOperation { repository.disconnect() }
-    }
+    fun disconnect() = runConnectionOperation { repository.disconnect() }
 
-    fun connectToHost(hostId: String) {
-        runConnectionOperation { repository.connectToHost(hostId) }
-    }
+    fun connectToHost(hostId: String) = runConnectionOperation { repository.connectToHost(hostId) }
 
-    fun scanNetwork() {
-        runConnectionOperation { repository.scanNetwork() }
-    }
+    fun scanNetwork() = runConnectionOperation { repository.scanNetwork() }
 
-    fun clearLogs() {
-        repository.clearLogs()
-    }
+    fun clearLogs() = repository.clearLogs()
 
     private fun runConnectionOperation(operation: suspend () -> Unit) {
-        viewModelScope.launch {
-            _uiState.value = ConnectionUiState.Loading
-            operation()
-        }
+        viewModelScope.launch { operation() }
     }
 }

@@ -23,5 +23,5 @@ class OniCanvasCommandService(
         send("zoom", buildJsonObject { put("amount", amount) })
 
     suspend fun shortcut(keys: List<String>): Boolean =
-        send("shortcut", buildJsonObject { put("keys", JsonArray(keys.map(::JsonPrimitive))) })
+        send("shortcut", buildJsonObject { put("keys", JsonArray(keys.map { JsonPrimitive(it) })) })
 }

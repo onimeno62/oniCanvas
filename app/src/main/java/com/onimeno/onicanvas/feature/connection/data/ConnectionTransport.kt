@@ -15,20 +15,15 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.Socket
 
-/**
- * Small transport layer for the companion TCP connection.
- *
- * Messages are UTF-8 text frames terminated by a newline. The actual
- * oniCanvas companion protocol can define its message format later.
- */
+/** TCP transport for newline-delimited oniCanvas protocol frames. */
 class ConnectionTransport {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var socket: Socket? = null
     private var writer: BufferedWriter? = null
     private var readerJob: Job? = null
 
-    private val _incomingMessages = MutableSharedFlow<String>(extraBufferCapacity = 32)
-    val incomingMessages: SharedFlow<String> = _incomingMessages.asSharedFlow()
+    private val _incomingMessages = MutableSharedFlow<OniCanvasMessage>(extraBufferCapacity = 32)
+    val incomingMessages: SharedFlow<OniCanvasMessage> = _incomingMessages.asSharedFlow()
 
     fun attach(socket: Socket) {
         closeSocketOnly()
@@ -40,7 +35,7 @@ class ConnectionTransport {
             try {
                 while (!socket.isClosed) {
                     val line = reader.readLine() ?: break
-                    _incomingMessages.emit(line)
+                    OniCanvasProtocol.decode(line)?.let { _incomingMessages.emit(it) }
                 }
             } finally {
                 reader.close()
@@ -48,12 +43,12 @@ class ConnectionTransport {
         }
     }
 
-    suspend fun send(message: String): Boolean {
+    suspend fun send(message: OniCanvasMessage): Boolean {
         val currentWriter = writer ?: return false
         if (socket?.isClosed != false) return false
 
         return try {
-            currentWriter.write(message)
+            currentWriter.write(OniCanvasProtocol.encode(message))
             currentWriter.newLine()
             currentWriter.flush()
             true
@@ -62,12 +57,8 @@ class ConnectionTransport {
         }
     }
 
-    /** Closes only the active network connection; the transport can reconnect later. */
-    fun close() {
-        closeSocketOnly()
-    }
+    fun close() = closeSocketOnly()
 
-    /** Permanently stops the transport's coroutine scope. */
     fun shutdown() {
         closeSocketOnly()
         scope.cancel()

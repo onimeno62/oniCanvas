@@ -5,10 +5,10 @@ package com.onimeno.onicanvas.feature.connection.data
  * Keeps command construction out of UI code and the raw TCP transport.
  */
 class OniCanvasCommandService(
-    private val connectionRepository: ConnectionRepository
+    private val sendFrame: suspend (String) -> Boolean
 ) {
     suspend fun send(command: String, value: String? = null): Boolean {
-        return connectionRepository.sendMessage(
+        return sendFrame(
             OniCanvasProtocol.encode(OniCanvasMessage.Command(command, value))
         )
     }

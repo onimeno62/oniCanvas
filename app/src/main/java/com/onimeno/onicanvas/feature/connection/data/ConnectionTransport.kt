@@ -1,5 +1,6 @@
 package com.onimeno.onicanvas.feature.connection.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,16 +36,21 @@ class ConnectionTransport {
         val reader = BufferedReader(InputStreamReader(newSocket.getInputStream(), Charsets.UTF_8))
 
         readerJob = scope.launch {
-            var unexpectedClose = true
+            var peerClosed = false
             try {
                 while (!newSocket.isClosed) {
-                    val line = reader.readLine() ?: break
+                    val line = reader.readLine()
+                    if (line == null) {
+                        peerClosed = true
+                        break
+                    }
                     OniCanvasProtocol.decode(line)?.let { _incomingMessages.emit(it) }
                 }
-                unexpectedClose = false
+            } catch (_: CancellationException) {
+                // Local close/cancellation is intentional.
             } finally {
                 reader.close()
-                if (unexpectedClose) _disconnected.emit(Unit)
+                if (peerClosed) _disconnected.emit(Unit)
             }
         }
     }

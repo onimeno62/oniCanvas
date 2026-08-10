@@ -48,8 +48,10 @@ class ConnectionTransport {
                 }
             } catch (_: CancellationException) {
                 // Local close/cancellation is intentional.
+            } catch (_: Exception) {
+                peerClosed = true
             } finally {
-                reader.close()
+                runCatching { reader.close() }
                 if (peerClosed) _disconnected.emit(Unit)
             }
         }

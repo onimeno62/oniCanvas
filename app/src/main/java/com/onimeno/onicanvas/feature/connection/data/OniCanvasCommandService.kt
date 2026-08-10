@@ -1,6 +1,8 @@
 package com.onimeno.onicanvas.feature.connection.data
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -21,5 +23,5 @@ class OniCanvasCommandService(
         send("zoom", buildJsonObject { put("amount", amount) })
 
     suspend fun shortcut(keys: List<String>): Boolean =
-        send("shortcut", buildJsonObject { put("keys", kotlinx.serialization.json.JsonArray(keys.map(::kotlinx.serialization.json.JsonPrimitive))) })
+        send("shortcut", buildJsonObject { put("keys", JsonArray(keys.map(::JsonPrimitive))) })
 }

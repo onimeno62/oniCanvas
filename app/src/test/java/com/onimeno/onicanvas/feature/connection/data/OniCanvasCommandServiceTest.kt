@@ -14,19 +14,13 @@ class OniCanvasCommandServiceTest {
 
     @Test
     fun commandServiceSendsEncodedCommand() = runTest {
-        val repository = RecordingConnectionRepository()
-        val service = OniCanvasCommandService(repository)
+        var lastFrame: String? = null
+        val service = OniCanvasCommandService { frame ->
+            lastFrame = frame
+            true
+        }
 
         assertTrue(service.undo())
-        assertEquals("CMD|undo", repository.lastMessage)
-    }
-
-    private class RecordingConnectionRepository : ConnectionRepository() {
-        var lastMessage: String? = null
-
-        override suspend fun sendMessage(message: String): Boolean {
-            lastMessage = message
-            return true
-        }
+        assertEquals("CMD|undo", lastFrame)
     }
 }

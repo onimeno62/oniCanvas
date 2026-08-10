@@ -1,7 +1,7 @@
 package com.onimeno.onicanvas.feature.connection.data
 
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -43,6 +43,9 @@ class OniCanvasCommandServiceTest {
         }
 
         assertTrue(service.shortcut(listOf("CTRL", "Z")))
-        assertEquals(listOf("CTRL", "Z"), lastMessage?.payload?.get("keys")?.jsonObject?.toMap()?.keys?.toList() ?: emptyList())
+        assertEquals(
+            listOf("CTRL", "Z"),
+            lastMessage?.payload?.get("keys")?.jsonArray?.map { it.jsonPrimitive.content }
+        )
     }
 }

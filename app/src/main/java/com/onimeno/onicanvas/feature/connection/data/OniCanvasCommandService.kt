@@ -1,17 +1,17 @@
 package com.onimeno.onicanvas.feature.connection.data
 
-/**
- * Application-facing API for sending oniCanvas commands.
- * Keeps command construction out of UI code and the raw TCP transport.
- */
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+
+/** Application-facing API for sending oniCanvas commands. */
 class OniCanvasCommandService(
-    private val sendFrame: suspend (String) -> Boolean
+    private val sendMessage: suspend (OniCanvasMessage) -> Boolean
 ) {
-    suspend fun send(command: String, value: String? = null): Boolean {
-        return sendFrame(
-            OniCanvasProtocol.encode(OniCanvasMessage.Command(command, value))
-        )
-    }
+    suspend fun send(command: String, payload: JsonObject = buildJsonObject {}): Boolean =
+        sendMessage(OniCanvasMessage.command(command, payload))
 
     suspend fun undo(): Boolean = send("undo")
 
@@ -19,5 +19,9 @@ class OniCanvasCommandService(
 
     suspend fun save(): Boolean = send("save")
 
-    suspend fun zoom(value: String): Boolean = send("zoom", value)
+    suspend fun zoom(amount: Double): Boolean =
+        send("zoom", buildJsonObject { put("amount", amount) })
+
+    suspend fun shortcut(keys: List<String>): Boolean =
+        send("shortcut", buildJsonObject { put("keys", JsonArray(keys.map { JsonPrimitive(it) })) })
 }

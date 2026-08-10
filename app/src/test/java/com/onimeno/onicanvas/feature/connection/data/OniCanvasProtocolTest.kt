@@ -1,47 +1,60 @@
 package com.onimeno.onicanvas.feature.connection.data
 
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OniCanvasProtocolTest {
     @Test
-    fun encodeCommandWithoutValue() {
-        assertEquals("CMD|undo", OniCanvasProtocol.encode(OniCanvasMessage.Command("undo")))
+    fun encodeProducesVersionedJsonEnvelope() {
+        val frame = OniCanvasProtocol.encode(
+            OniCanvasMessage.command("zoom", buildJsonObject { put("amount", 1.25) })
+        )
+
+        assertTrue(frame.contains("\"version\":1"))
+        assertTrue(frame.contains("\"type\":\"command\""))
+        assertTrue(frame.contains("\"action\":\"zoom\""))
+        assertTrue(frame.contains("\"amount\":1.25"))
     }
 
     @Test
-    fun encodeCommandWithValue() {
-        assertEquals("CMD|zoom|1.25", OniCanvasProtocol.encode(OniCanvasMessage.Command("zoom", "1.25")))
+    fun decodeRoundTripsJsonMessage() {
+        val original = OniCanvasMessage.command(
+            "zoom",
+            buildJsonObject { put("amount", 1.25) }
+        )
+
+        val decoded = OniCanvasProtocol.decode(OniCanvasProtocol.encode(original))
+
+        assertEquals(original, decoded)
     }
 
     @Test
-    fun decodeCommandWithValue() {
-        assertEquals(OniCanvasMessage.Command("zoom", "1.25"), OniCanvasProtocol.decode("CMD|zoom|1.25"))
+    fun decodeHeartbeatAck() {
+        val message = OniCanvasMessage.heartbeatAck("heartbeat-1")
+        val decoded = OniCanvasProtocol.decode(OniCanvasProtocol.encode(message))
+
+        assertNotNull(decoded)
+        assertEquals(OniCanvasMessage.Type.HEARTBEAT_ACK, decoded?.type)
+        assertEquals("heartbeat-1", decoded?.id)
     }
 
     @Test
-    fun decodeEventWithoutValue() {
-        assertEquals(OniCanvasMessage.Event("connected"), OniCanvasProtocol.decode("EVT|connected"))
+    fun decodeLegacyCommandForMigration() {
+        val decoded = OniCanvasProtocol.decode("CMD|undo")
+
+        assertEquals(OniCanvasMessage.Type.COMMAND, decoded?.type)
+        assertEquals("undo", decoded?.payload?.get("action")?.toString()?.trim('"'))
     }
 
     @Test
-    fun decodeUnknownFrameReturnsNull() {
+    fun decodeRejectsMalformedJson() {
+        assertNull(OniCanvasProtocol.decode("{not-json"))
         assertNull(OniCanvasProtocol.decode("BAD|message"))
-    }
-
-    @Test
-    fun decodeBlankNameReturnsNull() {
         assertNull(OniCanvasProtocol.decode("CMD|"))
-    }
-
-    @Test
-    fun encodeRejectsBlankName() {
-        try {
-            OniCanvasProtocol.encode(OniCanvasMessage.Command(""))
-            throw AssertionError("Expected IllegalArgumentException")
-        } catch (_: IllegalArgumentException) {
-            // Expected.
-        }
     }
 }

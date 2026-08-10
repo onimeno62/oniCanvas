@@ -6,20 +6,22 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import kotlin.math.max
 
-/** Opens a real TCP connection to the companion endpoint. */
+/** Opens a real TCP connection to a companion endpoint and measures connect latency. */
 class ConnectionProbe(
-    private val port: Int = DEFAULT_PORT,
+    private val defaultPort: Int = DEFAULT_PORT,
     private val timeoutMs: Int = DEFAULT_TIMEOUT_MS
 ) {
-    suspend fun connect(host: String): ProbeResult = withContext(Dispatchers.IO) {
+    suspend fun connect(host: String, port: Int = defaultPort): ProbeResult = withContext(Dispatchers.IO) {
         val startedAt = System.nanoTime()
         val socket = Socket()
         try {
+            socket.tcpNoDelay = true
+            socket.keepAlive = true
             socket.connect(InetSocketAddress(host, port), timeoutMs)
             val elapsedMs = max(1L, (System.nanoTime() - startedAt) / 1_000_000L).toInt()
             ProbeResult.Success(socket, elapsedMs)
         } catch (exception: Exception) {
-            socket.close()
+            runCatching { socket.close() }
             ProbeResult.Failure(exception.message ?: "Unable to reach companion")
         }
     }
@@ -29,7 +31,7 @@ class ConnectionProbe(
         data class Failure(val reason: String) : ProbeResult
     }
 
-    private companion object {
+    companion object {
         const val DEFAULT_PORT = 8085
         const val DEFAULT_TIMEOUT_MS = 1_500
     }

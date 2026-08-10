@@ -36,7 +36,7 @@ class RealDashboardRepository(
                 activeSoftware = "Clip Studio Paint",
                 activeWorkspace = "Manga / Illustration Layout",
                 batteryLevel = 88,
-                latencyMs = 8,
+                latencyMs = connection.latencyMs ?: 0,
                 recentWorkspaces = recentWorkspaces,
                 quickActions = quickActions
             )
@@ -44,67 +44,18 @@ class RealDashboardRepository(
 
     private companion object {
         val recentWorkspaces = listOf(
-            WorkspaceSummary(
-                id = "illust_layout",
-                name = "Illustration Master",
-                description = "Optimized for painting & detailing",
-                iconName = "brush",
-                buttonCount = 16
-            ),
-            WorkspaceSummary(
-                id = "manga_layout",
-                name = "Manga Page Setup",
-                description = "Fast panel and line-art macros",
-                iconName = "book",
-                buttonCount = 12
-            ),
-            WorkspaceSummary(
-                id = "sculpt_3d",
-                name = "3D Sculpt Companion",
-                description = "Camera rotation & brush size mapping",
-                iconName = "cube",
-                buttonCount = 20
-            ),
-            WorkspaceSummary(
-                id = "sketch_pad",
-                name = "Quick Sketch Layout",
-                description = "Minimalist pad for raw concepts",
-                iconName = "edit",
-                buttonCount = 8
-            )
+            WorkspaceSummary("illust_layout", "Illustration Master", "Optimized for painting & detailing", "brush", 16),
+            WorkspaceSummary("manga_layout", "Manga Page Setup", "Fast panel and line-art macros", "book", 12),
+            WorkspaceSummary("sculpt_3d", "3D Sculpt Companion", "Camera rotation & brush size mapping", "cube", 20),
+            WorkspaceSummary("sketch_pad", "Quick Sketch Layout", "Minimalist pad for raw concepts", "edit", 8)
         )
 
         val quickActions = listOf(
-            QuickActionItem(
-                title = "Connect System",
-                description = "Manage Companion Connection",
-                iconName = "wifi",
-                actionType = QuickActionType.CONNECT
-            ),
-            QuickActionItem(
-                title = "Macro Pad",
-                description = "Trigger Keyboard Actions",
-                iconName = "apps",
-                actionType = QuickActionType.MACRO_PAD
-            ),
-            QuickActionItem(
-                title = "Gesture Pad",
-                description = "Pan, Zoom, & Rotate Canvas",
-                iconName = "gesture",
-                actionType = QuickActionType.GESTURE_PAD
-            ),
-            QuickActionItem(
-                title = "Radial Menu",
-                description = "Thumb-friendly Action Ring",
-                iconName = "track_changes",
-                actionType = QuickActionType.RADIAL_MENU
-            ),
-            QuickActionItem(
-                title = "Touchpad Mode",
-                description = "Wireless Desktop Precision Mouse",
-                iconName = "mouse",
-                actionType = QuickActionType.TOUCHPAD
-            )
+            QuickActionItem("Connect System", "Manage Companion Connection", "wifi", QuickActionType.CONNECT),
+            QuickActionItem("Macro Pad", "Trigger Keyboard Actions", "apps", QuickActionType.MACRO_PAD),
+            QuickActionItem("Gesture Pad", "Pan, Zoom, & Rotate Canvas", "gesture", QuickActionType.GESTURE_PAD),
+            QuickActionItem("Radial Menu", "Thumb-friendly Action Ring", "track_changes", QuickActionType.RADIAL_MENU),
+            QuickActionItem("Touchpad Mode", "Wireless Desktop Precision Mouse", "mouse", QuickActionType.TOUCHPAD)
         )
     }
 }

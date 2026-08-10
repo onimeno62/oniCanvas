@@ -1,6 +1,6 @@
 package com.onimeno.onicanvas.feature.connection.data
 
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +13,7 @@ class OniCanvasCommandServiceTest {
     }
 
     @Test
-    fun commandServiceSendsEncodedCommand() = runTest {
+    fun commandServiceSendsEncodedCommand() = runBlocking {
         var lastFrame: String? = null
         val service = OniCanvasCommandService { frame ->
             lastFrame = frame

@@ -24,4 +24,18 @@ class OniCanvasCommandService(
 
     suspend fun shortcut(keys: List<String>): Boolean =
         send("shortcut", buildJsonObject { put("keys", JsonArray(keys.map { JsonPrimitive(it) })) })
+
+    suspend fun brush(): Boolean = send("brush")
+
+    suspend fun eraser(): Boolean = send("eraser")
+
+    suspend fun fill(): Boolean = send("fill")
+
+    suspend fun selection(): Boolean = send("selection")
+
+    suspend fun transform(): Boolean = send("transform")
+
+    suspend fun copy(): Boolean = send("copy")
+
+    suspend fun paste(): Boolean = send("paste")
 }

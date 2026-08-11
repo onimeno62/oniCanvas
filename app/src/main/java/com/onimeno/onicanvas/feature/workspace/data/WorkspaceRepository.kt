@@ -1,22 +1,35 @@
 package com.onimeno.onicanvas.feature.workspace.data
 
+import com.onimeno.onicanvas.feature.settings.data.SettingsRepository
 import com.onimeno.onicanvas.feature.workspace.state.ControlModule
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class WorkspaceRepository(
-    private val dao: WorkspaceDao
+    private val dao: WorkspaceDao,
+    private val settingsRepository: SettingsRepository
 ) {
 
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val workspaces: Flow<List<WorkspaceItem>> = dao.observeAll().map { entities ->
         entities.map(WorkspaceEntity::toDomain)
+    }
+
+    val activeWorkspaceId: Flow<String> = settingsRepository.activeWorkspaceIdFlow
+
+    val activeWorkspace: Flow<WorkspaceItem?> = combine(workspaces, activeWorkspaceId) { list, activeId ->
+        list.find { it.id == activeId } ?: list.firstOrNull()
+    }
+
+    suspend fun setActiveWorkspaceId(id: String) {
+        settingsRepository.updateActiveWorkspaceId(id)
     }
 
     init {

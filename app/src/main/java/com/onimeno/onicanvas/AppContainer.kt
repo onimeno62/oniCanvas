@@ -36,6 +36,13 @@ private val PROFILE_MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+private val WORKSPACE_MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE workspaces ADD COLUMN gridSize INTEGER NOT NULL DEFAULT 3")
+        db.execSQL("ALTER TABLE workspaces ADD COLUMN macroPagesJson TEXT NOT NULL DEFAULT '[]'")
+    }
+}
+
 class AppContainer(
     context: Context
 ) {
@@ -47,24 +54,26 @@ class AppContainer(
         OniDatabase::class.java,
         "oni_canvas.db"
     )
-        .addMigrations(PROFILE_MIGRATION_1_2)
+        .addMigrations(PROFILE_MIGRATION_1_2, WORKSPACE_MIGRATION_2_3)
         .build()
 
+    val settingsRepository: SettingsRepository = SettingsRepository(
+        applicationContext.dataStore
+    )
+
     val workspaceRepository: WorkspaceRepository = WorkspaceRepository(
-        workspaceDatabase.workspaceDao()
+        workspaceDatabase.workspaceDao(),
+        settingsRepository
     )
 
     val profileRepository: ProfileRepository = ProfileRepository(
         workspaceDatabase.profileDao()
     )
 
-    val settingsRepository: SettingsRepository = SettingsRepository(
-        applicationContext.dataStore
-    )
-
     val connectionRepository: ConnectionRepository = ConnectionRepository()
 
     val dashboardRepository: DashboardRepository = RealDashboardRepository(
-        connectionRepository = connectionRepository
+        connectionRepository = connectionRepository,
+        workspaceRepository = workspaceRepository
     )
 }

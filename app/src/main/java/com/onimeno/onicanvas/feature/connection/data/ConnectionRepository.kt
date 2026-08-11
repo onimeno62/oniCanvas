@@ -60,7 +60,7 @@ class ConnectionRepository(
     private var missedHeartbeats = 0
 
     val incomingMessages: SharedFlow<OniCanvasMessage> = transport.incomingMessages
-    val commandService = OniCanvasCommandService { frame -> sendMessage(frame) }
+    val commandService = OniCanvasCommandService { frame -> send(frame) }
 
     private val _state = MutableStateFlow(
         ConnectionSnapshot(

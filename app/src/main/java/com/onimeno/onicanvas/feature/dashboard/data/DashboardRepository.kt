@@ -5,8 +5,10 @@ import com.onimeno.onicanvas.feature.connection.data.ConnectionRepository
 import com.onimeno.onicanvas.feature.dashboard.state.QuickActionItem
 import com.onimeno.onicanvas.feature.dashboard.state.QuickActionType
 import com.onimeno.onicanvas.feature.dashboard.state.WorkspaceSummary
+import com.onimeno.onicanvas.feature.workspace.data.WorkspaceRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 
 data class DashboardData(
     val deviceName: String,
@@ -25,31 +27,38 @@ interface DashboardRepository {
 }
 
 class RealDashboardRepository(
-    private val connectionRepository: ConnectionRepository
+    private val connectionRepository: ConnectionRepository,
+    private val workspaceRepository: WorkspaceRepository
 ) : DashboardRepository {
-    override fun getDashboardData(): Flow<DashboardData> =
-        connectionRepository.state.map { connection ->
-            DashboardData(
-                deviceName = connection.activeHostName ?: "No device connected",
-                connectionType = connection.transportType,
-                connectionStatus = connection.status,
-                activeSoftware = "Clip Studio Paint",
-                activeWorkspace = "Manga / Illustration Layout",
-                batteryLevel = 88,
-                latencyMs = connection.latencyMs ?: 0,
-                recentWorkspaces = recentWorkspaces,
-                quickActions = quickActions
+    override fun getDashboardData(): Flow<DashboardData> = combine(
+        connectionRepository.state,
+        workspaceRepository.workspaces,
+        workspaceRepository.activeWorkspace
+    ) { connection, workspacesList, activeWS ->
+        val summaries = workspacesList.map { ws ->
+            WorkspaceSummary(
+                id = ws.id,
+                name = ws.name,
+                description = ws.description,
+                iconName = ws.iconName,
+                buttonCount = ws.gridSize * ws.gridSize
             )
-        }
+        }.take(4)
 
-    private companion object {
-        val recentWorkspaces = listOf(
-            WorkspaceSummary("illust_layout", "Illustration Master", "Optimized for painting & detailing", "brush", 16),
-            WorkspaceSummary("manga_layout", "Manga Page Setup", "Fast panel and line-art macros", "book", 12),
-            WorkspaceSummary("sculpt_3d", "3D Sculpt Companion", "Camera rotation & brush size mapping", "cube", 20),
-            WorkspaceSummary("sketch_pad", "Quick Sketch Layout", "Minimalist pad for raw concepts", "edit", 8)
+        DashboardData(
+            deviceName = connection.activeHostName ?: "No device connected",
+            connectionType = connection.transportType,
+            connectionStatus = connection.status,
+            activeSoftware = activeWS?.targetApp ?: "Clip Studio Paint",
+            activeWorkspace = activeWS?.name ?: "No Active Workspace",
+            batteryLevel = 88,
+            latencyMs = connection.latencyMs ?: 0,
+            recentWorkspaces = summaries,
+            quickActions = quickActions
         )
+    }
 
+    companion object {
         val quickActions = listOf(
             QuickActionItem("Connect System", "Manage Companion Connection", "wifi", QuickActionType.CONNECT),
             QuickActionItem("Macro Pad", "Trigger Keyboard Actions", "apps", QuickActionType.MACRO_PAD),
@@ -61,7 +70,17 @@ class RealDashboardRepository(
 }
 
 class FakeDashboardRepository : DashboardRepository {
-    private val delegate = RealDashboardRepository(ConnectionRepository())
-
-    override fun getDashboardData(): Flow<DashboardData> = delegate.getDashboardData()
+    override fun getDashboardData(): Flow<DashboardData> = flowOf(
+        DashboardData(
+            deviceName = "No device connected",
+            connectionType = "WIFI",
+            connectionStatus = OniStatus.OFFLINE,
+            activeSoftware = "Clip Studio Paint",
+            activeWorkspace = "Manga / Illustration Layout",
+            batteryLevel = 88,
+            latencyMs = 0,
+            recentWorkspaces = emptyList(),
+            quickActions = RealDashboardRepository.quickActions
+        )
+    )
 }

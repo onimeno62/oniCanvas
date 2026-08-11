@@ -22,6 +22,25 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val ANIMATIONS_ENABLED = booleanPreferencesKey("animations_enabled")
         val LANGUAGE = stringPreferencesKey("language")
         val LAST_BACKUP_DATE = stringPreferencesKey("last_backup_date")
+        val ACTIVE_WORKSPACE_ID = stringPreferencesKey("active_workspace_id")
+    }
+
+    val activeWorkspaceIdFlow: Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.ACTIVE_WORKSPACE_ID] ?: "illust_layout"
+        }
+
+    suspend fun updateActiveWorkspaceId(id: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ACTIVE_WORKSPACE_ID] = id
+        }
     }
 
     val settingsFlow: Flow<SettingsData> = dataStore.data

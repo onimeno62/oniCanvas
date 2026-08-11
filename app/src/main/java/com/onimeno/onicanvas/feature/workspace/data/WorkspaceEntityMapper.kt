@@ -1,6 +1,6 @@
 package com.onimeno.onicanvas.feature.workspace.data
 
-import com.imeno.onicanvas.feature.controls.state.CreativeControlsConfig
+import com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig
 import com.onimeno.onicanvas.feature.workspace.state.ControlModule
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceCustomization
@@ -51,11 +51,9 @@ fun WorkspaceEntity.toDomain(): WorkspaceItem {
     val decodedPages = runCatching { workspaceJson.decodeFromString<List<MacroPage>>(macroPagesJson) }.getOrDefault(emptyList())
     val persistenceJson = runCatching { workspaceJson.parseToJsonElement(creativeControlsJson).jsonObject }.getOrNull()
     val isPhase7Payload = persistenceJson?.containsKey("customization") == true
-
     val persistence = if (isPhase7Payload) {
         runCatching { workspaceJson.decodeFromString<WorkspacePersistencePayload>(creativeControlsJson) }.getOrNull()
     } else null
-
     val creativeControls = persistence?.creativeControls ?: runCatching {
         workspaceJson.decodeFromString<CreativeControlsConfig>(creativeControlsJson)
     }.getOrDefault(CreativeControlsConfig())

@@ -1,4 +1,4 @@
-package com.imeno.onicanvas.feature.workspace.state
+package com.onimeno.onicanvas.feature.workspace.state
 
 import com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig
 

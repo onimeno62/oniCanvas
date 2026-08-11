@@ -45,6 +45,7 @@ import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModelFacto
 import com.onimeno.onicanvas.feature.profiles.ui.ProfilesScreen
 import com.onimeno.onicanvas.feature.productivity.ui.ProductivityScreen
 import com.onimeno.onicanvas.feature.productivity.viewmodel.ProductivityViewModel
+import com.onimeno.onicanvas.feature.productivity.viewmodel.ProductivityViewModelFactory
 import com.onimeno.onicanvas.feature.settings.ui.SettingsScreen
 import com.onimeno.onicanvas.feature.workspace.ui.WorkspaceEditorRoute as WorkspaceEditorRouteScreen
 import com.onimeno.onicanvas.feature.workspace.ui.WorkspaceScreen
@@ -102,35 +103,28 @@ fun OniApp() {
             NavHost(navController = navController, startDestination = DashboardRoute) {
                 composable<DashboardRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
-                    val viewModel: DashboardViewModel = viewModel(factory = DashboardViewModelFactory(app.container.dashboardRepository))
-                    DashboardScreen(
-                        viewModel = viewModel,
-                        onNavigateToConnection = { navController.navigate(ConnectionRoute) },
-                        onNavigateToControls = { navController.navigate(ControlsRoute) },
-                        onNavigateToWorkspace = { navController.navigate(WorkspaceRoute) },
-                        onNavigateToSettings = { navController.navigate(SettingsRoute) },
-                        onNavigateToAbout = { navController.navigate(AboutRoute) }
-                    )
+                    val vm: DashboardViewModel = viewModel(factory = DashboardViewModelFactory(app.container.dashboardRepository))
+                    DashboardScreen(vm, { navController.navigate(ConnectionRoute) }, { navController.navigate(ControlsRoute) }, { navController.navigate(WorkspaceRoute) }, { navController.navigate(SettingsRoute) }, { navController.navigate(AboutRoute) })
                 }
                 composable<WorkspaceRoute> { WorkspaceScreen(onWorkspaceClick = { id -> navController.navigate(WorkspaceEditorRoute(id)) }) }
-                composable<WorkspaceEditorRoute> { backStackEntry ->
-                    val route: WorkspaceEditorRoute = backStackEntry.toRoute()
-                    WorkspaceEditorRouteScreen(workspaceId = route.workspaceId, onBackClick = { navController.popBackStack() })
+                composable<WorkspaceEditorRoute> { entry ->
+                    val route: WorkspaceEditorRoute = entry.toRoute()
+                    WorkspaceEditorRouteScreen(route.workspaceId) { navController.popBackStack() }
                 }
                 composable<ControlsRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
-                    val viewModel: ControlsViewModel = viewModel(factory = ControlsViewModelFactory(app.container.workspaceRepository, app.container.connectionRepository))
-                    ControlsScreen(viewModel = viewModel)
+                    val vm: ControlsViewModel = viewModel(factory = ControlsViewModelFactory(app.container.workspaceRepository, app.container.connectionRepository))
+                    ControlsScreen(viewModel = vm)
                 }
                 composable<ProductivityRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
-                    val viewModel: ProductivityViewModel = viewModel(factory = androidx.lifecycle.ViewModelProvider.Factory { ProductivityViewModel(app.container.connectionRepository) })
-                    ProductivityScreen(viewModel = viewModel)
+                    val vm: ProductivityViewModel = viewModel(factory = ProductivityViewModelFactory(app.container.connectionRepository))
+                    ProductivityScreen(viewModel = vm)
                 }
                 composable<ConnectionRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
-                    val viewModel: ConnectionViewModel = viewModel(factory = ConnectionViewModelFactory(app.container.connectionRepository))
-                    ConnectionScreen(viewModel = viewModel)
+                    val vm: ConnectionViewModel = viewModel(factory = ConnectionViewModelFactory(app.container.connectionRepository))
+                    ConnectionScreen(viewModel = vm)
                 }
                 composable<ProfilesRoute> { ProfilesScreen() }
                 composable<SettingsRoute> { SettingsScreen(onBackClick = { navController.popBackStack() }) }

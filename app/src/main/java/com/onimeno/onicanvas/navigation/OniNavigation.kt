@@ -15,6 +15,9 @@ data class WorkspaceEditorRoute(val workspaceId: String)
 object ControlsRoute
 
 @Serializable
+object ProductivityRoute
+
+@Serializable
 object ConnectionRoute
 
 @Serializable

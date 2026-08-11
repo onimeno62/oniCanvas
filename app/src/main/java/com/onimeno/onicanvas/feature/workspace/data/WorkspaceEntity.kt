@@ -13,5 +13,7 @@ data class WorkspaceEntity(
     val iconName: String,
     val isFavorite: Boolean,
     val lastUsed: String,
-    val enabledModules: String
+    val enabledModules: String,
+    val gridSize: Int = 3,
+    val macroPagesJson: String = "[]"
 )

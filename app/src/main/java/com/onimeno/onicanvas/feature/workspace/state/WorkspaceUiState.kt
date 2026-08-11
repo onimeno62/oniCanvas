@@ -17,7 +17,9 @@ data class WorkspaceItem(
     val iconName: String,
     val isFavorite: Boolean = false,
     val lastUsed: String,
-    val enabledModules: List<ControlModule> = ControlModule.values().toList()
+    val enabledModules: List<ControlModule> = ControlModule.values().toList(),
+    val gridSize: Int = 3,
+    val macroPages: List<MacroPage> = emptyList()
 )
 
 sealed interface WorkspaceUiState {

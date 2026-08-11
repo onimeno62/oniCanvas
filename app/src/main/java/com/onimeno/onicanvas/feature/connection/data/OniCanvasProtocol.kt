@@ -4,9 +4,22 @@ import java.util.UUID
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
+
+private const val CURRENT_VERSION = 1
+
+private fun JsonObject.withAction(action: String): JsonObject = buildJsonObject {
+    put("action", action)
+    for ((key, value) in this@withAction) put(key, value)
+}
+
+private fun JsonObject.withName(name: String): JsonObject = buildJsonObject {
+    put("event", name)
+    for ((key, value) in this@withName) put(key, value)
+}
 
 /** Versioned, newline-delimited JSON protocol shared with the Windows companion. */
 data class OniCanvasMessage(
@@ -87,16 +100,4 @@ object OniCanvasProtocol {
             else -> null
         }
     }
-
-    private fun JsonObject.withAction(action: String): JsonObject = buildJsonObject {
-        put("action", action)
-        for ((key, value) in this@withAction) put(key, value)
-    }
-
-    private fun JsonObject.withName(name: String): JsonObject = buildJsonObject {
-        put("event", name)
-        for ((key, value) in this@withName) put(key, value)
-    }
-
-    private const val CURRENT_VERSION = 1
 }

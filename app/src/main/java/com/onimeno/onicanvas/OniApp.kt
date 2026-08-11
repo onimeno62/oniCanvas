@@ -36,6 +36,8 @@ import com.onimeno.onicanvas.feature.connection.ui.ConnectionScreen
 import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModel
 import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModelFactory
 import com.onimeno.onicanvas.feature.controls.ui.ControlsScreen
+import com.onimeno.onicanvas.feature.controls.viewmodel.ControlsViewModel
+import com.onimeno.onicanvas.feature.controls.viewmodel.ControlsViewModelFactory
 import com.onimeno.onicanvas.feature.dashboard.ui.DashboardScreen
 import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModel
 import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModelFactory
@@ -112,7 +114,16 @@ fun OniApp() {
                     val route: WorkspaceEditorRoute = backStackEntry.toRoute()
                     WorkspaceEditorRouteScreen(workspaceId = route.workspaceId, onBackClick = { navController.popBackStack() })
                 }
-                composable<ControlsRoute> { ControlsScreen() }
+                composable<ControlsRoute> {
+                    val app = LocalContext.current.applicationContext as OniCanvasApp
+                    val viewModel: ControlsViewModel = viewModel(
+                        factory = ControlsViewModelFactory(
+                            app.container.workspaceRepository,
+                            app.container.connectionRepository
+                        )
+                    )
+                    ControlsScreen(viewModel = viewModel)
+                }
                 composable<ConnectionRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
                     val viewModel: ConnectionViewModel = viewModel(

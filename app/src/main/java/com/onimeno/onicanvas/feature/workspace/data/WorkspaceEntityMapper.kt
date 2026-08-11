@@ -1,6 +1,6 @@
 package com.onimeno.onicanvas.feature.workspace.data
 
-import com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig
+import com.imeno.onicanvas.feature.controls.state.CreativeControlsConfig
 import com.onimeno.onicanvas.feature.workspace.state.ControlModule
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceCustomization
@@ -25,26 +25,20 @@ fun createDefaultPages(workspaceId: String, gridSize: Int): List<MacroPage> {
     val buttons = mutableListOf<MacroButton>()
     val maxButtons = gridSize * gridSize
     val actionsList = listOf(
-        Pair("Undo", MacroAction.Undo), Pair("Redo", MacroAction.Redo),
-        Pair("Save", MacroAction.Save), Pair("Brush", MacroAction.Brush),
-        Pair("Eraser", MacroAction.Eraser), Pair("Fill", MacroAction.Fill),
-        Pair("Select", MacroAction.Selection), Pair("Transform", MacroAction.Transform),
-        Pair("Copy", MacroAction.Copy), Pair("Paste", MacroAction.Paste)
+        Pair("Undo", MacroAction.Undo), Pair("Redo", MacroAction.Redo), Pair("Save", MacroAction.Save),
+        Pair("Brush", MacroAction.Brush), Pair("Eraser", MacroAction.Eraser), Pair("Fill", MacroAction.Fill),
+        Pair("Select", MacroAction.Selection), Pair("Transform", MacroAction.Transform), Pair("Copy", MacroAction.Copy),
+        Pair("Paste", MacroAction.Paste)
     )
-
     for (i in 0 until maxButtons) {
         val actionPair = actionsList.getOrNull(i % actionsList.size) ?: continue
-        buttons.add(
-            MacroButton(
-                id = "${pageId}_btn_${i}", position = i,
-                label = actionPair.first, iconName = actionPair.first.lowercase(),
-                action = actionPair.second,
-                longPressAction = if (actionPair.second is MacroAction.Undo) MacroAction.Redo else null,
-                repeatEnabled = false, enabled = true, hidden = false
-            )
-        )
+        buttons.add(MacroButton(
+            id = "${pageId}_btn_${i}", position = i, label = actionPair.first,
+            iconName = actionPair.first.lowercase(), action = actionPair.second,
+            longPressAction = if (actionPair.second is MacroAction.Undo) MacroAction.Redo else null,
+            repeatEnabled = false, enabled = true, hidden = false
+        ))
     }
-
     return listOf(MacroPage(pageId, "Default Page", 0, buttons))
 }
 
@@ -54,17 +48,17 @@ fun WorkspaceEntity.toDomain(): WorkspaceItem {
             .mapNotNull { name -> ControlModule.values().find { it.name == name } }
     }.getOrDefault(emptyList())
 
-    val decodedPages = runCatching { workspaceJson.decodeFromString<List<MacroPage>>(macroPagesJson) }
-        .getOrDefault(emptyList())
+    val decodedPages = runCatching { workspaceJson.decodeFromString<List<MacroPage>>(macroPagesJson) }.getOrDefault(emptyList())
+    val persistenceJson = runCatching { workspaceJson.parseToJsonElement(creativeControlsJson).jsonObject }.getOrNull()
+    val isPhase7Payload = persistenceJson?.containsKey("customization") == true
 
-    val persistence = runCatching {
-        workspaceJson.decodeFromString<WorkspacePersistencePayload>(creativeControlsJson)
-    }.getOrNull()
+    val persistence = if (isPhase7Payload) {
+        runCatching { workspaceJson.decodeFromString<WorkspacePersistencePayload>(creativeControlsJson) }.getOrNull()
+    } else null
 
     val creativeControls = persistence?.creativeControls ?: runCatching {
         workspaceJson.decodeFromString<CreativeControlsConfig>(creativeControlsJson)
     }.getOrDefault(CreativeControlsConfig())
-
     val customization = persistence?.customization ?: WorkspaceCustomization()
     val pages = if (decodedPages.isEmpty()) createDefaultPages(id, gridSize) else decodedPages
 
@@ -72,8 +66,7 @@ fun WorkspaceEntity.toDomain(): WorkspaceItem {
         id = id, name = name, description = description, targetApp = targetApp,
         buttonCount = buttonCount, iconName = iconName, isFavorite = isFavorite,
         lastUsed = lastUsed, enabledModules = decodedModules, gridSize = gridSize,
-        macroPages = pages, creativeControlsConfig = creativeControls,
-        customization = customization
+        macroPages = pages, creativeControlsConfig = creativeControls, customization = customization
     )
 }
 
@@ -84,7 +77,5 @@ fun WorkspaceItem.toEntity(): WorkspaceEntity = WorkspaceEntity(
     enabledModules = workspaceJson.encodeToString(enabledModules.map { it.name }),
     gridSize = gridSize,
     macroPagesJson = workspaceJson.encodeToString(macroPages),
-    creativeControlsJson = workspaceJson.encodeToString(
-        WorkspacePersistencePayload(creativeControlsConfig, customization)
-    )
+    creativeControlsJson = workspaceJson.encodeToString(WorkspacePersistencePayload(creativeControlsConfig, customization))
 )

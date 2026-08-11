@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.FolderSpecial
+import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.TrackChanges
 import androidx.compose.material.icons.rounded.Wifi
@@ -42,6 +43,9 @@ import com.onimeno.onicanvas.feature.dashboard.ui.DashboardScreen
 import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModel
 import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModelFactory
 import com.onimeno.onicanvas.feature.profiles.ui.ProfilesScreen
+import com.onimeno.onicanvas.feature.productivity.ui.ProductivityScreen
+import com.onimeno.onicanvas.feature.productivity.viewmodel.ProductivityViewModel
+import com.onimeno.onicanvas.feature.productivity.viewmodel.ProductivityViewModelFactory
 import com.onimeno.onicanvas.feature.settings.ui.SettingsScreen
 import com.onimeno.onicanvas.feature.workspace.ui.WorkspaceEditorRoute as WorkspaceEditorRouteScreen
 import com.onimeno.onicanvas.feature.workspace.ui.WorkspaceScreen
@@ -50,6 +54,7 @@ import com.onimeno.onicanvas.navigation.ConnectionRoute
 import com.onimeno.onicanvas.navigation.ControlsRoute
 import com.onimeno.onicanvas.navigation.DashboardRoute
 import com.onimeno.onicanvas.navigation.ProfilesRoute
+import com.onimeno.onicanvas.navigation.ProductivityRoute
 import com.onimeno.onicanvas.navigation.SettingsRoute
 import com.onimeno.onicanvas.navigation.WorkspaceEditorRoute
 import com.onimeno.onicanvas.navigation.WorkspaceRoute
@@ -65,6 +70,7 @@ fun OniApp() {
         BottomNavItem(DashboardRoute, "Dashboard", Icons.Rounded.Dashboard, Icons.Rounded.Dashboard),
         BottomNavItem(WorkspaceRoute, "Workspaces", Icons.Rounded.Storage, Icons.Rounded.Storage),
         BottomNavItem(ControlsRoute, "Controls", Icons.Rounded.TrackChanges, Icons.Rounded.TrackChanges),
+        BottomNavItem(ProductivityRoute, "Productivity", Icons.Rounded.Layers, Icons.Rounded.Layers),
         BottomNavItem(ConnectionRoute, "Connect", Icons.Rounded.Wifi, Icons.Rounded.Wifi),
         BottomNavItem(ProfilesRoute, "Profiles", Icons.Rounded.FolderSpecial, Icons.Rounded.FolderSpecial)
     )
@@ -97,11 +103,9 @@ fun OniApp() {
             NavHost(navController = navController, startDestination = DashboardRoute) {
                 composable<DashboardRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
-                    val viewModel: DashboardViewModel = viewModel(
-                        factory = DashboardViewModelFactory(app.container.dashboardRepository)
-                    )
+                    val vm: DashboardViewModel = viewModel(factory = DashboardViewModelFactory(app.container.dashboardRepository))
                     DashboardScreen(
-                        viewModel = viewModel,
+                        viewModel = vm,
                         onNavigateToConnection = { navController.navigate(ConnectionRoute) },
                         onNavigateToControls = { navController.navigate(ControlsRoute) },
                         onNavigateToWorkspace = { navController.navigate(WorkspaceRoute) },
@@ -110,26 +114,24 @@ fun OniApp() {
                     )
                 }
                 composable<WorkspaceRoute> { WorkspaceScreen(onWorkspaceClick = { id -> navController.navigate(WorkspaceEditorRoute(id)) }) }
-                composable<WorkspaceEditorRoute> { backStackEntry ->
-                    val route: WorkspaceEditorRoute = backStackEntry.toRoute()
+                composable<WorkspaceEditorRoute> { entry ->
+                    val route: WorkspaceEditorRoute = entry.toRoute()
                     WorkspaceEditorRouteScreen(workspaceId = route.workspaceId, onBackClick = { navController.popBackStack() })
                 }
                 composable<ControlsRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
-                    val viewModel: ControlsViewModel = viewModel(
-                        factory = ControlsViewModelFactory(
-                            app.container.workspaceRepository,
-                            app.container.connectionRepository
-                        )
-                    )
-                    ControlsScreen(viewModel = viewModel)
+                    val vm: ControlsViewModel = viewModel(factory = ControlsViewModelFactory(app.container.workspaceRepository, app.container.connectionRepository))
+                    ControlsScreen(viewModel = vm)
+                }
+                composable<ProductivityRoute> {
+                    val app = LocalContext.current.applicationContext as OniCanvasApp
+                    val vm: ProductivityViewModel = viewModel(factory = ProductivityViewModelFactory(app.container.connectionRepository))
+                    ProductivityScreen(viewModel = vm)
                 }
                 composable<ConnectionRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
-                    val viewModel: ConnectionViewModel = viewModel(
-                        factory = ConnectionViewModelFactory(app.container.connectionRepository)
-                    )
-                    ConnectionScreen(viewModel = viewModel)
+                    val vm: ConnectionViewModel = viewModel(factory = ConnectionViewModelFactory(app.container.connectionRepository))
+                    ConnectionScreen(viewModel = vm)
                 }
                 composable<ProfilesRoute> { ProfilesScreen() }
                 composable<SettingsRoute> { SettingsScreen(onBackClick = { navController.popBackStack() }) }

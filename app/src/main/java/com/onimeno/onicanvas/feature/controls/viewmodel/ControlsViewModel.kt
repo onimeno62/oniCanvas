@@ -308,6 +308,154 @@ class ControlsViewModel(
         return successState?.activeWorkspace
     }
 
+    // Creative Controls & Canvas Commands
+    fun onPan(deltaX: Double, deltaY: Double) {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        val config = state.activeWorkspace.creativeControlsConfig
+        val binding = config.gestureBindings.find {
+            it.gestureType == com.onimeno.onicanvas.feature.controls.state.GestureType.ONE_FINGER_PAN ||
+            it.gestureType == com.onimeno.onicanvas.feature.controls.state.GestureType.TWO_FINGER_PAN
+        }
+        if (binding?.enabled == false) return
+
+        val invertX = if (config.invertPanX) -1.0 else 1.0
+        val invertY = if (config.invertPanY) -1.0 else 1.0
+        val sens = (config.panSensitivity * (binding?.sensitivity ?: 1.0f)).toDouble()
+
+        val effectiveDx = deltaX * sens * invertX
+        val effectiveDy = deltaY * sens * invertY
+
+        viewModelScope.launch {
+            connectionRepository.commandService.pan(effectiveDx, effectiveDy)
+        }
+    }
+
+    fun onZoom(amount: Double) {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        val config = state.activeWorkspace.creativeControlsConfig
+        val binding = config.gestureBindings.find {
+            it.gestureType == com.onimeno.onicanvas.feature.controls.state.GestureType.PINCH_ZOOM
+        }
+        if (binding?.enabled == false) return
+
+        val sens = (config.zoomSensitivity * (binding?.sensitivity ?: 1.0f)).toDouble()
+        val invert = config.invertZoom
+        val adjustedAmount = if (invert) {
+            1.0 / (1.0 + (amount - 1.0) * sens)
+        } else {
+            1.0 + (amount - 1.0) * sens
+        }
+
+        viewModelScope.launch {
+            connectionRepository.commandService.zoom(adjustedAmount)
+        }
+    }
+
+    fun onRotate(angleDegrees: Double) {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        val config = state.activeWorkspace.creativeControlsConfig
+        val binding = config.gestureBindings.find {
+            it.gestureType == com.onimeno.onicanvas.feature.controls.state.GestureType.ROTATE_CANVAS
+        }
+        if (binding?.enabled == false) return
+
+        val invert = if (config.invertRotation) -1.0 else 1.0
+        val sens = (config.rotationSensitivity * (binding?.sensitivity ?: 1.0f)).toDouble()
+        val effectiveAngle = angleDegrees * sens * invert
+
+        viewModelScope.launch {
+            connectionRepository.commandService.rotate(effectiveAngle)
+        }
+    }
+
+    fun onTapUndo() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch {
+            connectionRepository.commandService.undo()
+        }
+    }
+
+    fun onTapRedo() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch {
+            connectionRepository.commandService.redo()
+        }
+    }
+
+    fun zoomIn() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.zoomIn() }
+    }
+
+    fun zoomOut() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.zoomOut() }
+    }
+
+    fun resetZoom() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.resetZoom() }
+    }
+
+    fun fitCanvas() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.fitCanvas() }
+    }
+
+    fun resetView() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.resetView() }
+    }
+
+    fun rotateLeft() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.rotateLeft() }
+    }
+
+    fun rotateRight() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.rotateRight() }
+    }
+
+    fun resetRotation() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.resetRotation() }
+    }
+
+    fun flipHorizontal() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.flipHorizontal() }
+    }
+
+    fun flipVertical() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        viewModelScope.launch { connectionRepository.commandService.flipVertical() }
+    }
+
+    fun updateCreativeControlsConfig(newConfig: com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig) {
+        val currentWorkspace = getActiveWorkspaceItem() ?: return
+        viewModelScope.launch {
+            workspaceRepository.saveWorkspace(
+                currentWorkspace.copy(creativeControlsConfig = newConfig)
+            )
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopRepeatAction()

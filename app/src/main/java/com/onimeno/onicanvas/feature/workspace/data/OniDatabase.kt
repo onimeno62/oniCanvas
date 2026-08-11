@@ -6,7 +6,7 @@ import com.onimeno.onicanvas.feature.profiles.data.ProfileEntity
 
 @Database(
     entities = [WorkspaceEntity::class, ProfileEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class OniDatabase : RoomDatabase() {

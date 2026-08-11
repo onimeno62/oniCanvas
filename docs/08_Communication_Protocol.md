@@ -142,15 +142,118 @@ Example
 
 ---
 
-# Zoom Command
+# Zoom Commands
 
+```json
 {
-    "type":"command",
-    "action":"zoom",
-    "payload":{
-        "amount":1.20
+    "type": "command",
+    "action": "zoom",
+    "payload": {
+        "amount": 1.20
     }
 }
+```
+
+```json
+{
+    "type": "command",
+    "action": "zoom_in"
+}
+```
+
+```json
+{
+    "type": "command",
+    "action": "zoom_out"
+}
+```
+
+```json
+{
+    "type": "command",
+    "action": "reset_zoom"
+}
+```
+
+---
+
+# Gesture & Canvas Commands (Phase 5)
+
+## Pan Command
+
+```json
+{
+    "type": "command",
+    "action": "pan",
+    "payload": {
+        "deltaX": 15.5,
+        "deltaY": -8.0
+    }
+}
+```
+
+## Rotate Command
+
+```json
+{
+    "type": "command",
+    "action": "rotate",
+    "payload": {
+        "angle": 45.0
+    }
+}
+```
+
+## Canvas View Actions
+
+```json
+{
+    "type": "command",
+    "action": "fit_canvas"
+}
+```
+
+```json
+{
+    "type": "command",
+    "action": "reset_view"
+}
+```
+
+```json
+{
+    "type": "command",
+    "action": "rotate_left"
+}
+```
+
+```json
+{
+    "type": "command",
+    "action": "rotate_right"
+}
+```
+
+```json
+{
+    "type": "command",
+    "action": "reset_rotation"
+}
+```
+
+```json
+{
+    "type": "command",
+    "action": "flip_horizontal"
+}
+```
+
+```json
+{
+    "type": "command",
+    "action": "flip_vertical"
+}
+```
 
 ---
 

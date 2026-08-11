@@ -38,4 +38,33 @@ class OniCanvasCommandService(
     suspend fun copy(): Boolean = send("copy")
 
     suspend fun paste(): Boolean = send("paste")
+
+    suspend fun pan(deltaX: Double, deltaY: Double): Boolean =
+        send("pan", buildJsonObject {
+            put("deltaX", deltaX)
+            put("deltaY", deltaY)
+        })
+
+    suspend fun rotate(angleDegrees: Double): Boolean =
+        send("rotate", buildJsonObject { put("angle", angleDegrees) })
+
+    suspend fun rotateLeft(): Boolean = send("rotate_left")
+
+    suspend fun rotateRight(): Boolean = send("rotate_right")
+
+    suspend fun resetRotation(): Boolean = send("reset_rotation")
+
+    suspend fun resetView(): Boolean = send("reset_view")
+
+    suspend fun fitCanvas(): Boolean = send("fit_canvas")
+
+    suspend fun flipHorizontal(): Boolean = send("flip_horizontal")
+
+    suspend fun flipVertical(): Boolean = send("flip_vertical")
+
+    suspend fun zoomIn(): Boolean = send("zoom_in")
+
+    suspend fun zoomOut(): Boolean = send("zoom_out")
+
+    suspend fun resetZoom(): Boolean = send("reset_zoom")
 }

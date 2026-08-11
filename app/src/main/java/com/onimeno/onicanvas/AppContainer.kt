@@ -43,6 +43,12 @@ private val WORKSPACE_MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+private val CREATIVE_CONTROLS_MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE workspaces ADD COLUMN creativeControlsJson TEXT NOT NULL DEFAULT '{}'")
+    }
+}
+
 class AppContainer(
     context: Context
 ) {
@@ -54,7 +60,7 @@ class AppContainer(
         OniDatabase::class.java,
         "oni_canvas.db"
     )
-        .addMigrations(PROFILE_MIGRATION_1_2, WORKSPACE_MIGRATION_2_3)
+        .addMigrations(PROFILE_MIGRATION_1_2, WORKSPACE_MIGRATION_2_3, CREATIVE_CONTROLS_MIGRATION_3_4)
         .build()
 
     val settingsRepository: SettingsRepository = SettingsRepository(

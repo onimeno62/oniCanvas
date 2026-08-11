@@ -182,6 +182,7 @@ fun MacroPadContent(
     var pageToRename by remember { mutableStateOf<MacroPage?>(null) }
     var buttonToCustomize by remember { mutableStateOf<MacroButton?>(null) }
     var showWorkspaceDropdown by remember { mutableStateOf(false) }
+    var selectedMode by remember { mutableStateOf("MACRO_PAD") }
 
     LazyColumn(
         modifier = modifier
@@ -199,15 +200,69 @@ fun MacroPadContent(
             )
         }
 
-        // Workspace Selection Row
+        // Mode Switcher Tabs
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "ACTIVE WORKSPACE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        RoundedCornerShape(12.dp)
+                    )
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Button(
+                    onClick = { selectedMode = "MACRO_PAD" },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("controls_mode_macro_pad"),
+                    colors = if (selectedMode == "MACRO_PAD") {
+                        androidx.compose.material3.ButtonDefaults.buttonColors()
+                    } else {
+                        androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                            containerColor = Color.Transparent
+                        )
+                    }
+                ) {
+                    Text("Macro Pad")
+                }
+
+                Button(
+                    onClick = { selectedMode = "CREATIVE_CONTROLS" },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("controls_mode_creative"),
+                    colors = if (selectedMode == "CREATIVE_CONTROLS") {
+                        androidx.compose.material3.ButtonDefaults.buttonColors()
+                    } else {
+                        androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                            containerColor = Color.Transparent
+                        )
+                    }
+                ) {
+                    Text("Creative Controls")
+                }
+            }
+        }
+
+        if (selectedMode == "CREATIVE_CONTROLS") {
+            item {
+                CreativeControlsSection(
+                    state = state,
+                    viewModel = viewModel
                 )
+            }
+        } else {
+            // Workspace Selection Row
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "ACTIVE WORKSPACE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedCard(
                         onClick = { showWorkspaceDropdown = true },
@@ -469,6 +524,7 @@ fun MacroPadContent(
                 }
             }
         }
+    }
     }
 
     // Add Page Dialog

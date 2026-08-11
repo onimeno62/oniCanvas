@@ -1,5 +1,7 @@
 package com.onimeno.onicanvas.feature.workspace.state
 
+import com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig
+
 enum class ControlModule(val displayName: String, val description: String) {
     MACRO_PAD("Macro Pad", "Custom macro action keys and modifier overrides"),
     GESTURE_PAD("Gesture Pad", "Custom gestural bindings and trackpad behavior"),
@@ -19,7 +21,8 @@ data class WorkspaceItem(
     val lastUsed: String,
     val enabledModules: List<ControlModule> = ControlModule.values().toList(),
     val gridSize: Int = 3,
-    val macroPages: List<MacroPage> = emptyList()
+    val macroPages: List<MacroPage> = emptyList(),
+    val creativeControlsConfig: CreativeControlsConfig = CreativeControlsConfig()
 )
 
 sealed interface WorkspaceUiState {

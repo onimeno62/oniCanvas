@@ -15,5 +15,6 @@ data class WorkspaceEntity(
     val lastUsed: String,
     val enabledModules: String,
     val gridSize: Int = 3,
-    val macroPagesJson: String = "[]"
+    val macroPagesJson: String = "[]",
+    val creativeControlsJson: String = "{}"
 )

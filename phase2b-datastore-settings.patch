@@ -1,0 +1,302 @@
+diff --git a/app/src/main/java/com/onimeno/onicanvas/AppContainer.kt b/app/src/main/java/com/onimeno/onicanvas/AppContainer.kt
+index d47ce28..f8fc698 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/AppContainer.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/AppContainer.kt
+@@ -1,10 +1,16 @@
+ package com.onimeno.onicanvas
+ 
+ import android.content.Context
++import androidx.datastore.core.DataStore
++import androidx.datastore.preferences.core.Preferences
++import androidx.datastore.preferences.preferencesDataStore
+ import androidx.room.Room
++import com.onimeno.onicanvas.feature.settings.data.SettingsRepository
+ import com.onimeno.onicanvas.feature.workspace.data.OniDatabase
+ import com.onimeno.onicanvas.feature.workspace.data.WorkspaceRepository
+ 
++private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "oni_settings")
++
+ class AppContainer(
+     context: Context
+ ) {
+@@ -20,4 +26,8 @@ class AppContainer(
+     val workspaceRepository: WorkspaceRepository = WorkspaceRepository(
+         workspaceDatabase.workspaceDao()
+     )
++
++    val settingsRepository: SettingsRepository = SettingsRepository(
++        applicationContext.dataStore
++    )
+ }
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/settings/data/SettingsRepository.kt b/app/src/main/java/com/onimeno/onicanvas/feature/settings/data/SettingsRepository.kt
+new file mode 100644
+index 0000000..3d35a32
+--- /dev/null
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/settings/data/SettingsRepository.kt
+@@ -0,0 +1,88 @@
++package com.onimeno.onicanvas.feature.settings.data
++
++import androidx.datastore.core.DataStore
++import androidx.datastore.preferences.core.Preferences
++import androidx.datastore.preferences.core.booleanPreferencesKey
++import androidx.datastore.preferences.core.edit
++import androidx.datastore.preferences.core.emptyPreferences
++import androidx.datastore.preferences.core.stringPreferencesKey
++import com.onimeno.onicanvas.feature.settings.state.SettingsData
++import kotlinx.coroutines.flow.Flow
++import kotlinx.coroutines.flow.catch
++import kotlinx.coroutines.flow.map
++import java.io.IOException
++
++class SettingsRepository(private val dataStore: DataStore<Preferences>) {
++
++    private object PreferencesKeys {
++        val DARK_THEME = booleanPreferencesKey("dark_theme")
++        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
++        val TABLET_MODE = booleanPreferencesKey("tablet_mode")
++        val AUTO_CONNECT = booleanPreferencesKey("auto_connect")
++        val ANIMATIONS_ENABLED = booleanPreferencesKey("animations_enabled")
++        val LANGUAGE = stringPreferencesKey("language")
++        val LAST_BACKUP_DATE = stringPreferencesKey("last_backup_date")
++    }
++
++    val settingsFlow: Flow<SettingsData> = dataStore.data
++        .catch { exception ->
++            if (exception is IOException) {
++                emit(emptyPreferences())
++            } else {
++                throw exception
++            }
++        }
++        .map { preferences ->
++            SettingsData(
++                darkTheme = preferences[PreferencesKeys.DARK_THEME] ?: true,
++                dynamicColor = preferences[PreferencesKeys.DYNAMIC_COLOR] ?: true,
++                tabletMode = preferences[PreferencesKeys.TABLET_MODE] ?: false,
++                autoConnect = preferences[PreferencesKeys.AUTO_CONNECT] ?: true,
++                animationsEnabled = preferences[PreferencesKeys.ANIMATIONS_ENABLED] ?: true,
++                language = preferences[PreferencesKeys.LANGUAGE] ?: "English",
++                lastBackupDate = preferences[PreferencesKeys.LAST_BACKUP_DATE] ?: "Today, 12:45 PM"
++            )
++        }
++
++    suspend fun updateDarkTheme(enabled: Boolean) {
++        dataStore.edit { preferences ->
++            preferences[PreferencesKeys.DARK_THEME] = enabled
++        }
++    }
++
++    suspend fun updateDynamicColor(enabled: Boolean) {
++        dataStore.edit { preferences ->
++            preferences[PreferencesKeys.DYNAMIC_COLOR] = enabled
++        }
++    }
++
++    suspend fun updateTabletMode(enabled: Boolean) {
++        dataStore.edit { preferences ->
++            preferences[PreferencesKeys.TABLET_MODE] = enabled
++        }
++    }
++
++    suspend fun updateAutoConnect(enabled: Boolean) {
++        dataStore.edit { preferences ->
++            preferences[PreferencesKeys.AUTO_CONNECT] = enabled
++        }
++    }
++
++    suspend fun updateAnimationsEnabled(enabled: Boolean) {
++        dataStore.edit { preferences ->
++            preferences[PreferencesKeys.ANIMATIONS_ENABLED] = enabled
++        }
++    }
++
++    suspend fun updateLanguage(language: String) {
++        dataStore.edit { preferences ->
++            preferences[PreferencesKeys.LANGUAGE] = language
++        }
++    }
++
++    suspend fun updateLastBackupDate(date: String) {
++        dataStore.edit { preferences ->
++            preferences[PreferencesKeys.LAST_BACKUP_DATE] = date
++        }
++    }
++}
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/settings/ui/SettingsScreen.kt b/app/src/main/java/com/onimeno/onicanvas/feature/settings/ui/SettingsScreen.kt
+index dd9dc26..9c86c14 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/settings/ui/SettingsScreen.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/settings/ui/SettingsScreen.kt
+@@ -39,7 +39,6 @@ import androidx.compose.material3.Switch
+ import androidx.compose.material3.SwitchDefaults
+ import androidx.compose.material3.Text
+ import androidx.compose.runtime.Composable
+-import androidx.compose.runtime.collectAsState
+ import androidx.compose.runtime.getValue
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+@@ -50,7 +49,9 @@ import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.platform.testTag
+ import androidx.compose.ui.text.font.FontWeight
+ import androidx.compose.ui.unit.dp
++import androidx.lifecycle.compose.collectAsStateWithLifecycle
+ import androidx.lifecycle.viewmodel.compose.viewModel
++import com.onimeno.onicanvas.OniCanvasApp
+ import com.onimeno.onicanvas.core.designsystem.components.OniButton
+ import com.onimeno.onicanvas.core.designsystem.components.OniCard
+ import com.onimeno.onicanvas.core.designsystem.components.OniEmptyState
+@@ -62,14 +63,19 @@ import com.onimeno.onicanvas.core.designsystem.theme.SuccessColor
+ import com.onimeno.onicanvas.feature.settings.state.SettingsData
+ import com.onimeno.onicanvas.feature.settings.state.SettingsUiState
+ import com.onimeno.onicanvas.feature.settings.viewmodel.SettingsViewModel
++import com.onimeno.onicanvas.feature.settings.viewmodel.SettingsViewModelFactory
+ 
+ @Composable
+ fun SettingsScreen(
+     modifier: Modifier = Modifier,
+     onBackClick: () -> Unit = {},
+-    viewModel: SettingsViewModel = viewModel()
++    viewModel: SettingsViewModel = viewModel(
++        factory = SettingsViewModelFactory(
++            (LocalContext.current.applicationContext as OniCanvasApp).container.settingsRepository
++        )
++    )
+ ) {
+-    val uiState by viewModel.uiState.collectAsState()
++    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+     val spacing = LocalSpacing.current
+     val context = LocalContext.current
+ 
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/settings/viewmodel/SettingsViewModel.kt b/app/src/main/java/com/onimeno/onicanvas/feature/settings/viewmodel/SettingsViewModel.kt
+index bf366d5..4b4d5d4 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/settings/viewmodel/SettingsViewModel.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/settings/viewmodel/SettingsViewModel.kt
+@@ -2,23 +2,25 @@ package com.onimeno.onicanvas.feature.settings.viewmodel
+ 
+ import androidx.lifecycle.ViewModel
+ import androidx.lifecycle.viewModelScope
++import com.onimeno.onicanvas.feature.settings.data.SettingsRepository
+ import com.onimeno.onicanvas.feature.settings.state.SettingsData
+ import com.onimeno.onicanvas.feature.settings.state.SettingsUiState
+ import kotlinx.coroutines.delay
+ import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.flow.catch
+ import kotlinx.coroutines.launch
+ import java.text.SimpleDateFormat
+ import java.util.Date
+ import java.util.Locale
+ 
+-class SettingsViewModel : ViewModel() {
++class SettingsViewModel(private val repository: SettingsRepository) : ViewModel() {
+ 
+     private val _uiState = MutableStateFlow<SettingsUiState>(SettingsUiState.Loading)
+     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+ 
+-    private var currentSettings = SettingsData(
++    private var lastSettings = SettingsData(
+         darkTheme = true,
+         dynamicColor = true,
+         tabletMode = false,
+@@ -35,51 +37,58 @@ class SettingsViewModel : ViewModel() {
+     fun loadSettings() {
+         viewModelScope.launch {
+             _uiState.value = SettingsUiState.Loading
+-            delay(200)
+-            _uiState.value = SettingsUiState.Success(currentSettings)
++            repository.settingsFlow
++                .catch { exception ->
++                    _uiState.value = SettingsUiState.Error(exception.message ?: "Unknown error")
++                }
++                .collect { settings ->
++                    lastSettings = settings
++                    _uiState.value = SettingsUiState.Success(settings)
++                }
+         }
+     }
+ 
+     fun toggleDarkTheme() {
+-        currentSettings = currentSettings.copy(darkTheme = !currentSettings.darkTheme)
+-        updateState()
++        viewModelScope.launch {
++            repository.updateDarkTheme(!lastSettings.darkTheme)
++        }
+     }
+ 
+     fun toggleDynamicColor() {
+-        currentSettings = currentSettings.copy(dynamicColor = !currentSettings.dynamicColor)
+-        updateState()
++        viewModelScope.launch {
++            repository.updateDynamicColor(!lastSettings.dynamicColor)
++        }
+     }
+ 
+     fun toggleTabletMode() {
+-        currentSettings = currentSettings.copy(tabletMode = !currentSettings.tabletMode)
+-        updateState()
++        viewModelScope.launch {
++            repository.updateTabletMode(!lastSettings.tabletMode)
++        }
+     }
+ 
+     fun toggleAutoConnect() {
+-        currentSettings = currentSettings.copy(autoConnect = !currentSettings.autoConnect)
+-        updateState()
++        viewModelScope.launch {
++            repository.updateAutoConnect(!lastSettings.autoConnect)
++        }
+     }
+ 
+     fun toggleAnimations() {
+-        currentSettings = currentSettings.copy(animationsEnabled = !currentSettings.animationsEnabled)
+-        updateState()
++        viewModelScope.launch {
++            repository.updateAnimationsEnabled(!lastSettings.animationsEnabled)
++        }
+     }
+ 
+     fun changeLanguage(newLang: String) {
+-        currentSettings = currentSettings.copy(language = newLang)
+-        updateState()
++        viewModelScope.launch {
++            repository.updateLanguage(newLang)
++        }
+     }
+ 
+     fun performBackup() {
+         viewModelScope.launch {
+             val sdf = SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault())
+             val formattedDate = sdf.format(Date())
+-            currentSettings = currentSettings.copy(lastBackupDate = formattedDate)
+-            updateState()
++            repository.updateLastBackupDate(formattedDate)
+         }
+     }
+-
+-    private fun updateState() {
+-        _uiState.value = SettingsUiState.Success(currentSettings)
+-    }
+ }
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/settings/viewmodel/SettingsViewModelFactory.kt b/app/src/main/java/com/onimeno/onicanvas/feature/settings/viewmodel/SettingsViewModelFactory.kt
+new file mode 100644
+index 0000000..6aefbd7
+--- /dev/null
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/settings/viewmodel/SettingsViewModelFactory.kt
+@@ -0,0 +1,17 @@
++package com.onimeno.onicanvas.feature.settings.viewmodel
++
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.ViewModelProvider
++import com.onimeno.onicanvas.feature.settings.data.SettingsRepository
++
++class SettingsViewModelFactory(
++    private val repository: SettingsRepository
++) : ViewModelProvider.Factory {
++    override fun <T : ViewModel> create(modelClass: Class<T>): T {
++        if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
++            @Suppress("UNCHECKED_CAST")
++            return SettingsViewModel(repository) as T
++        }
++        throw IllegalArgumentException("Unknown ViewModel class")
++    }
++}

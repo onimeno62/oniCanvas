@@ -1,0 +1,2148 @@
+diff --git a/app/src/main/java/com/onimeno/onicanvas/AppContainer.kt b/app/src/main/java/com/onimeno/onicanvas/AppContainer.kt
+index 68f0080..3ef7a54 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/AppContainer.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/AppContainer.kt
+@@ -36,6 +36,13 @@ private val PROFILE_MIGRATION_1_2 = object : Migration(1, 2) {
+     }
+ }
+ 
++private val WORKSPACE_MIGRATION_2_3 = object : Migration(2, 3) {
++    override fun migrate(db: SupportSQLiteDatabase) {
++        db.execSQL("ALTER TABLE workspaces ADD COLUMN gridSize INTEGER NOT NULL DEFAULT 3")
++        db.execSQL("ALTER TABLE workspaces ADD COLUMN macroPagesJson TEXT NOT NULL DEFAULT '[]'")
++    }
++}
++
+ class AppContainer(
+     context: Context
+ ) {
+@@ -47,24 +54,26 @@ class AppContainer(
+         OniDatabase::class.java,
+         "oni_canvas.db"
+     )
+-        .addMigrations(PROFILE_MIGRATION_1_2)
++        .addMigrations(PROFILE_MIGRATION_1_2, WORKSPACE_MIGRATION_2_3)
+         .build()
+ 
++    val settingsRepository: SettingsRepository = SettingsRepository(
++        applicationContext.dataStore
++    )
++
+     val workspaceRepository: WorkspaceRepository = WorkspaceRepository(
+-        workspaceDatabase.workspaceDao()
++        workspaceDatabase.workspaceDao(),
++        settingsRepository
+     )
+ 
+     val profileRepository: ProfileRepository = ProfileRepository(
+         workspaceDatabase.profileDao()
+     )
+ 
+-    val settingsRepository: SettingsRepository = SettingsRepository(
+-        applicationContext.dataStore
+-    )
+-
+     val connectionRepository: ConnectionRepository = ConnectionRepository()
+ 
+     val dashboardRepository: DashboardRepository = RealDashboardRepository(
+-        connectionRepository = connectionRepository
++        connectionRepository = connectionRepository,
++        workspaceRepository = workspaceRepository
+     )
+ }
+diff --git a/app/src/main/java/com/onimeno/onicanvas/OniApp.kt b/app/src/main/java/com/onimeno/onicanvas/OniApp.kt
+index e47ce26..4532b2f 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/OniApp.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/OniApp.kt
+@@ -36,6 +36,8 @@ import com.onimeno.onicanvas.feature.connection.ui.ConnectionScreen
+ import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModel
+ import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModelFactory
+ import com.onimeno.onicanvas.feature.controls.ui.ControlsScreen
++import com.onimeno.onicanvas.feature.controls.viewmodel.ControlsViewModel
++import com.onimeno.onicanvas.feature.controls.viewmodel.ControlsViewModelFactory
+ import com.onimeno.onicanvas.feature.dashboard.ui.DashboardScreen
+ import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModel
+ import com.onimeno.onicanvas.feature.dashboard.viewmodel.DashboardViewModelFactory
+@@ -112,7 +114,16 @@ fun OniApp() {
+                     val route: WorkspaceEditorRoute = backStackEntry.toRoute()
+                     WorkspaceEditorRouteScreen(workspaceId = route.workspaceId, onBackClick = { navController.popBackStack() })
+                 }
+-                composable<ControlsRoute> { ControlsScreen() }
++                composable<ControlsRoute> {
++                    val app = LocalContext.current.applicationContext as OniCanvasApp
++                    val viewModel: ControlsViewModel = viewModel(
++                        factory = ControlsViewModelFactory(
++                            app.container.workspaceRepository,
++                            app.container.connectionRepository
++                        )
++                    )
++                    ControlsScreen(viewModel = viewModel)
++                }
+                 composable<ConnectionRoute> {
+                     val app = LocalContext.current.applicationContext as OniCanvasApp
+                     val viewModel: ConnectionViewModel = viewModel(
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/ConnectionRepository.kt b/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/ConnectionRepository.kt
+index b812c53..7b2b134 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/ConnectionRepository.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/ConnectionRepository.kt
+@@ -60,7 +60,7 @@ class ConnectionRepository(
+     private var missedHeartbeats = 0
+ 
+     val incomingMessages: SharedFlow<OniCanvasMessage> = transport.incomingMessages
+-    val commandService = OniCanvasCommandService { frame -> sendMessage(frame) }
++    val commandService = OniCanvasCommandService { frame -> send(frame) }
+ 
+     private val _state = MutableStateFlow(
+         ConnectionSnapshot(
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/OniCanvasCommandService.kt b/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/OniCanvasCommandService.kt
+index ebfdd2c..caa3a41 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/OniCanvasCommandService.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/OniCanvasCommandService.kt
+@@ -24,4 +24,18 @@ class OniCanvasCommandService(
+ 
+     suspend fun shortcut(keys: List<String>): Boolean =
+         send("shortcut", buildJsonObject { put("keys", JsonArray(keys.map { JsonPrimitive(it) })) })
++
++    suspend fun brush(): Boolean = send("brush")
++
++    suspend fun eraser(): Boolean = send("eraser")
++
++    suspend fun fill(): Boolean = send("fill")
++
++    suspend fun selection(): Boolean = send("selection")
++
++    suspend fun transform(): Boolean = send("transform")
++
++    suspend fun copy(): Boolean = send("copy")
++
++    suspend fun paste(): Boolean = send("paste")
+ }
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/OniCanvasProtocol.kt b/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/OniCanvasProtocol.kt
+index 3919d09..3cffcf8 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/OniCanvasProtocol.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/connection/data/OniCanvasProtocol.kt
+@@ -4,10 +4,23 @@ import java.util.UUID
+ import kotlinx.serialization.json.Json
+ import kotlinx.serialization.json.JsonObject
+ import kotlinx.serialization.json.buildJsonObject
++import kotlinx.serialization.json.jsonObject
+ import kotlinx.serialization.json.jsonPrimitive
+ import kotlinx.serialization.json.long
+ import kotlinx.serialization.json.put
+ 
++private const val CURRENT_VERSION = 1
++
++private fun JsonObject.withAction(action: String): JsonObject = buildJsonObject {
++    put("action", action)
++    for ((key, value) in this@withAction) put(key, value)
++}
++
++private fun JsonObject.withName(name: String): JsonObject = buildJsonObject {
++    put("event", name)
++    for ((key, value) in this@withName) put(key, value)
++}
++
+ /** Versioned, newline-delimited JSON protocol shared with the Windows companion. */
+ data class OniCanvasMessage(
+     val version: Int = CURRENT_VERSION,
+@@ -87,16 +100,4 @@ object OniCanvasProtocol {
+             else -> null
+         }
+     }
+-
+-    private fun JsonObject.withAction(action: String): JsonObject = buildJsonObject {
+-        put("action", action)
+-        for ((key, value) in this@withAction) put(key, value)
+-    }
+-
+-    private fun JsonObject.withName(name: String): JsonObject = buildJsonObject {
+-        put("event", name)
+-        for ((key, value) in this@withName) put(key, value)
+-    }
+-
+-    private const val CURRENT_VERSION = 1
+ }
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/controls/state/ControlsUiState.kt b/app/src/main/java/com/onimeno/onicanvas/feature/controls/state/ControlsUiState.kt
+index 356573e..4cfc2b5 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/controls/state/ControlsUiState.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/controls/state/ControlsUiState.kt
+@@ -1,5 +1,7 @@
+ package com.onimeno.onicanvas.feature.controls.state
+ 
++import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
++
+ data class ControlModule(
+     val id: String,
+     val title: String,
+@@ -13,8 +15,12 @@ data class ControlModule(
+ sealed interface ControlsUiState {
+     object Loading : ControlsUiState
+     data class Success(
+-        val modules: List<ControlModule>,
+-        val currentProfileName: String
++        val activeWorkspace: WorkspaceItem,
++        val availableWorkspaces: List<WorkspaceItem>,
++        val activePageId: String,
++        val isConnected: Boolean,
++        val connectionType: String = "—",
++        val activeHostName: String? = null
+     ) : ControlsUiState
+     data class Error(val message: String) : ControlsUiState
+ }
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/controls/ui/ControlsScreen.kt b/app/src/main/java/com/onimeno/onicanvas/feature/controls/ui/ControlsScreen.kt
+index 3ff40a1..1ed2f8c 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/controls/ui/ControlsScreen.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/controls/ui/ControlsScreen.kt
+@@ -1,13 +1,20 @@
+ package com.onimeno.onicanvas.feature.controls.ui
+ 
++import androidx.compose.animation.AnimatedVisibility
++import androidx.compose.foundation.BorderStroke
+ import androidx.compose.foundation.background
++import androidx.compose.foundation.border
+ import androidx.compose.foundation.clickable
++import androidx.compose.foundation.gestures.detectTapGestures
+ import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Box
+ import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.ExperimentalLayoutApi
++import androidx.compose.foundation.layout.FlowRow
+ import androidx.compose.foundation.layout.PaddingValues
+ import androidx.compose.foundation.layout.Row
+ import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.aspectRatio
+ import androidx.compose.foundation.layout.fillMaxSize
+ import androidx.compose.foundation.layout.fillMaxWidth
+ import androidx.compose.foundation.layout.height
+@@ -15,121 +22,1063 @@ import androidx.compose.foundation.layout.padding
+ import androidx.compose.foundation.layout.size
+ import androidx.compose.foundation.layout.width
+ import androidx.compose.foundation.lazy.LazyColumn
+-import androidx.compose.foundation.lazy.items
++import androidx.compose.foundation.lazy.grid.GridCells
++import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
++import androidx.compose.foundation.lazy.grid.items
+ import androidx.compose.foundation.shape.CircleShape
++import androidx.compose.foundation.shape.RoundedCornerShape
+ import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.rounded.Add
+ import androidx.compose.material.icons.rounded.Apps
++import androidx.compose.material.icons.rounded.ArrowBack
++import androidx.compose.material.icons.rounded.ArrowForward
++import androidx.compose.material.icons.rounded.ArrowLeft
++import androidx.compose.material.icons.rounded.ArrowRight
++import androidx.compose.material.icons.rounded.Brush
+ import androidx.compose.material.icons.rounded.Category
+-import androidx.compose.material.icons.rounded.Gesture
+-import androidx.compose.material.icons.rounded.GridView
+-import androidx.compose.material.icons.rounded.Tune
++import androidx.compose.material.icons.rounded.CleaningServices
++import androidx.compose.material.icons.rounded.ContentCopy
++import androidx.compose.material.icons.rounded.ContentPaste
++import androidx.compose.material.icons.rounded.Delete
++import androidx.compose.material.icons.rounded.Edit
++import androidx.compose.material.icons.rounded.FormatColorFill
++import androidx.compose.material.icons.rounded.Keyboard
++import androidx.compose.material.icons.rounded.KeyboardArrowDown
++import androidx.compose.material.icons.rounded.KeyboardArrowUp
++import androidx.compose.material.icons.rounded.Redo
++import androidx.compose.material.icons.rounded.Save
++import androidx.compose.material.icons.rounded.SelectAll
++import androidx.compose.material.icons.rounded.Settings
++import androidx.compose.material.icons.rounded.SmartButton
++import androidx.compose.material.icons.rounded.Transform
++import androidx.compose.material.icons.rounded.Undo
++import androidx.compose.material.icons.rounded.Wifi
++import androidx.compose.material.icons.rounded.WifiOff
+ import androidx.compose.material3.AlertDialog
++import androidx.compose.material3.Button
++import androidx.compose.material3.Card
++import androidx.compose.material3.CardDefaults
++import androidx.compose.material3.Checkbox
+ import androidx.compose.material3.CircularProgressIndicator
++import androidx.compose.material3.DropdownMenu
++import androidx.compose.material3.DropdownMenuItem
++import androidx.compose.material3.ExperimentalMaterial3Api
+ import androidx.compose.material3.Icon
+ import androidx.compose.material3.IconButton
+ import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.OutlinedCard
++import androidx.compose.material3.OutlinedTextField
+ import androidx.compose.material3.Scaffold
+-import androidx.compose.material3.Slider
++import androidx.compose.material3.ScrollableTabRow
++import androidx.compose.material3.Tab
+ import androidx.compose.material3.Text
+ import androidx.compose.material3.TextButton
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.getValue
+-import androidx.compose.runtime.mutableFloatStateOf
+ import androidx.compose.runtime.mutableStateOf
+ import androidx.compose.runtime.remember
+ import androidx.compose.runtime.setValue
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.alpha
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.vector.ImageVector
++import androidx.compose.ui.input.pointer.pointerInput
+ import androidx.compose.ui.platform.testTag
+ import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextAlign
++import androidx.compose.ui.text.style.TextOverflow
+ import androidx.compose.ui.unit.dp
++import androidx.compose.ui.window.Dialog
+ import androidx.lifecycle.compose.collectAsStateWithLifecycle
+ import androidx.lifecycle.viewmodel.compose.viewModel
+ import com.onimeno.onicanvas.core.designsystem.components.OniButton
+ import com.onimeno.onicanvas.core.designsystem.components.OniCard
+ import com.onimeno.onicanvas.core.designsystem.components.OniEmptyState
+-import com.onimeno.onicanvas.core.designsystem.components.OniSectionHeader
+ import com.onimeno.onicanvas.core.designsystem.components.OniTopBar
+ import com.onimeno.onicanvas.core.designsystem.theme.LocalSpacing
+-import com.onimeno.onicanvas.feature.controls.state.ControlModule
+ import com.onimeno.onicanvas.feature.controls.state.ControlsUiState
+ import com.onimeno.onicanvas.feature.controls.viewmodel.ControlsViewModel
++import com.onimeno.onicanvas.feature.workspace.state.MacroAction
++import com.onimeno.onicanvas.feature.workspace.state.MacroButton
++import com.onimeno.onicanvas.feature.workspace.state.MacroPage
++import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
+ 
++@OptIn(ExperimentalMaterial3Api::class)
+ @Composable
+-fun ControlsScreen(modifier: Modifier = Modifier, viewModel: ControlsViewModel = viewModel()) {
++fun ControlsScreen(
++    modifier: Modifier = Modifier,
++    viewModel: ControlsViewModel = viewModel()
++) {
+     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+-    var selectedModuleForConfig by remember { mutableStateOf<ControlModule?>(null) }
+-    Scaffold(modifier = modifier.fillMaxSize(), topBar = {
+-        OniTopBar(title = "Controls Layout", actions = { IconButton(onClick = viewModel::loadControls) { Icon(Icons.Rounded.Tune, contentDescription = "Reload layouts", tint = MaterialTheme.colorScheme.primary) } })
+-    }) { innerPadding ->
+-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(innerPadding)) {
++    var isEditMode by remember { mutableStateOf(false) }
++
++    Scaffold(
++        modifier = modifier.fillMaxSize(),
++        topBar = {
++            OniTopBar(
++                title = if (isEditMode) "Configure Macro Pad" else "Macro Pad",
++                actions = {
++                    IconButton(
++                        onClick = { isEditMode = !isEditMode },
++                        modifier = Modifier.testTag("toggle_edit_mode")
++                    ) {
++                        Icon(
++                            imageVector = if (isEditMode) Icons.Rounded.Save else Icons.Rounded.Edit,
++                            contentDescription = if (isEditMode) "Save Configuration" else "Edit Configuration",
++                            tint = MaterialTheme.colorScheme.primary
++                        )
++                    }
++                }
++            )
++        }
++    ) { innerPadding ->
++        Box(
++            Modifier
++                .fillMaxSize()
++                .background(MaterialTheme.colorScheme.background)
++                .padding(innerPadding)
++        ) {
+             when (val state = uiState) {
+-                ControlsUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
+-                is ControlsUiState.Success -> ControlsContent(state = state, onModuleClick = { selectedModuleForConfig = it })
+-                is ControlsUiState.Error -> OniEmptyState(title = "Failed to load controls", description = state.message, icon = Icons.Rounded.Category, actionText = "Retry", onActionClick = viewModel::loadControls)
++                ControlsUiState.Loading -> Box(
++                    Modifier.fillMaxSize(),
++                    contentAlignment = Alignment.Center
++                ) {
++                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
++                }
++                is ControlsUiState.Success -> {
++                    MacroPadContent(
++                        state = state,
++                        isEditMode = isEditMode,
++                        viewModel = viewModel
++                    )
++                }
++                is ControlsUiState.Error -> {
++                    OniEmptyState(
++                        title = "Failed to load layouts",
++                        description = state.message,
++                        icon = Icons.Rounded.Category,
++                        actionText = "Retry",
++                        onActionClick = {}
++                    )
++                }
+             }
+-            selectedModuleForConfig?.let { module -> ControlConfigSimulatorDialog(module = module, onDismiss = { selectedModuleForConfig = null }) { updated -> viewModel.toggleModuleState(module.id, updated); selectedModuleForConfig = null } }
+         }
+     }
+ }
+ 
+ @Composable
+-fun ControlsContent(state: ControlsUiState.Success, onModuleClick: (ControlModule) -> Unit, modifier: Modifier = Modifier) {
++fun MacroPadContent(
++    state: ControlsUiState.Success,
++    isEditMode: Boolean,
++    viewModel: ControlsViewModel,
++    modifier: Modifier = Modifier
++) {
+     val spacing = LocalSpacing.current
+-    LazyColumn(modifier = modifier.fillMaxSize().testTag("controls_screen_container"), contentPadding = PaddingValues(spacing.medium), verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
+-        item { Column(modifier = Modifier.fillMaxWidth().padding(bottom = spacing.small)) {
+-            Text("ACTIVE PROFILE MAPPING", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+-            Text(state.currentProfileName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+-            Spacer(Modifier.height(4.dp)); Text("Control pads auto-sync inputs directly to this application.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+-        } }
+-        item { OniSectionHeader(title = "Hardware Control Nodes") }
+-        items(state.modules, key = { it.id }) { module -> ControlModuleCard(module = module, onClick = { onModuleClick(module) }) }
++    val activeWS = state.activeWorkspace
++    val activePage = activeWS.macroPages.find { it.id == state.activePageId } ?: activeWS.macroPages.firstOrNull()
++
++    var showAddPageDialog by remember { mutableStateOf(false) }
++    var pageToRename by remember { mutableStateOf<MacroPage?>(null) }
++    var buttonToCustomize by remember { mutableStateOf<MacroButton?>(null) }
++    var showWorkspaceDropdown by remember { mutableStateOf(false) }
++
++    LazyColumn(
++        modifier = modifier
++            .fillMaxSize()
++            .testTag("controls_screen_container"),
++        contentPadding = PaddingValues(spacing.medium),
++        verticalArrangement = Arrangement.spacedBy(spacing.medium)
++    ) {
++        // Connection Info Banner
++        item {
++            ConnectionBanner(
++                isConnected = state.isConnected,
++                connectionType = state.connectionType,
++                hostName = state.activeHostName
++            )
++        }
++
++        // Workspace Selection Row
++        item {
++            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
++                Text(
++                    text = "ACTIVE WORKSPACE",
++                    style = MaterialTheme.typography.labelSmall,
++                    color = MaterialTheme.colorScheme.primary,
++                    fontWeight = FontWeight.Bold
++                )
++                Box(modifier = Modifier.fillMaxWidth()) {
++                    OutlinedCard(
++                        onClick = { showWorkspaceDropdown = true },
++                        modifier = Modifier
++                            .fillMaxWidth()
++                            .testTag("workspace_selector_card"),
++                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
++                    ) {
++                        Row(
++                            modifier = Modifier
++                                .fillMaxWidth()
++                                .padding(16.dp),
++                            horizontalArrangement = Arrangement.SpaceBetween,
++                            verticalAlignment = Alignment.CenterVertically
++                        ) {
++                            Column {
++                                Text(
++                                    text = activeWS.name,
++                                    style = MaterialTheme.typography.titleMedium,
++                                    fontWeight = FontWeight.Bold
++                                )
++                                Text(
++                                    text = activeWS.targetApp,
++                                    style = MaterialTheme.typography.bodySmall,
++                                    color = MaterialTheme.colorScheme.onSurfaceVariant
++                                )
++                            }
++                            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Select Workspace")
++                        }
++                    }
++
++                    DropdownMenu(
++                        expanded = showWorkspaceDropdown,
++                        onDismissRequest = { showWorkspaceDropdown = false },
++                        modifier = Modifier.fillMaxWidth(0.9f)
++                    ) {
++                        state.availableWorkspaces.forEach { ws ->
++                            DropdownMenuItem(
++                                text = {
++                                    Column {
++                                        Text(ws.name, fontWeight = FontWeight.Bold)
++                                        Text(ws.targetApp, style = MaterialTheme.typography.bodySmall)
++                                    }
++                                },
++                                onClick = {
++                                    viewModel.setActiveWorkspace(ws.id)
++                                    showWorkspaceDropdown = false
++                                },
++                                modifier = Modifier.testTag("ws_item_${ws.id}")
++                            )
++                        }
++                    }
++                }
++            }
++        }
++
++        // Grid Size Selection (Only shown in Edit Mode)
++        if (isEditMode) {
++            item {
++                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
++                    Text(
++                        text = "GRID LAYOUT COMPLEXITY",
++                        style = MaterialTheme.typography.labelSmall,
++                        color = MaterialTheme.colorScheme.primary,
++                        fontWeight = FontWeight.Bold
++                    )
++                    Row(
++                        modifier = Modifier.fillMaxWidth(),
++                        horizontalArrangement = Arrangement.spacedBy(8.dp)
++                    ) {
++                        listOf(2, 3, 4, 5).forEach { size ->
++                            val isSelected = activeWS.gridSize == size
++                            Card(
++                                onClick = { viewModel.updateGridSize(size) },
++                                modifier = Modifier
++                                    .weight(1f)
++                                    .testTag("grid_size_$size"),
++                                colors = CardDefaults.cardColors(
++                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
++                                )
++                            ) {
++                                Box(
++                                    modifier = Modifier
++                                        .fillMaxWidth()
++                                        .padding(vertical = 12.dp),
++                                    contentAlignment = Alignment.Center
++                                ) {
++                                    Text(
++                                        text = "${size}x${size}",
++                                        style = MaterialTheme.typography.labelLarge,
++                                        fontWeight = FontWeight.Bold,
++                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
++                                    )
++                                }
++                            }
++                        }
++                    }
++                }
++            }
++        }
++
++        // Page Navigation and Actions
++        if (activePage != null) {
++            item {
++                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
++                    Row(
++                        modifier = Modifier.fillMaxWidth(),
++                        horizontalArrangement = Arrangement.SpaceBetween,
++                        verticalAlignment = Alignment.CenterVertically
++                    ) {
++                        Text(
++                            text = "PAGES & TABS",
++                            style = MaterialTheme.typography.labelSmall,
++                            color = MaterialTheme.colorScheme.primary,
++                            fontWeight = FontWeight.Bold
++                        )
++                        if (isEditMode) {
++                            IconButton(
++                                onClick = { showAddPageDialog = true },
++                                modifier = Modifier
++                                    .size(24.dp)
++                                    .testTag("add_page_btn")
++                            ) {
++                                Icon(Icons.Rounded.Add, contentDescription = "Add Page")
++                            }
++                        }
++                    }
++
++                    // Pages tabs row
++                    ScrollableTabRow(
++                        selectedTabIndex = activeWS.macroPages.indexOfFirst { it.id == activePage.id }.coerceAtLeast(0),
++                        edgePadding = 0.dp,
++                        modifier = Modifier.fillMaxWidth()
++                    ) {
++                        activeWS.macroPages.forEach { page ->
++                            Tab(
++                                selected = page.id == activePage.id,
++                                onClick = { viewModel.selectPage(page.id) },
++                                modifier = Modifier.testTag("tab_${page.id}"),
++                                text = {
++                                    Text(
++                                        text = page.name,
++                                        fontWeight = if (page.id == activePage.id) FontWeight.Bold else FontWeight.Normal,
++                                        maxLines = 1,
++                                        overflow = TextOverflow.Ellipsis
++                                    )
++                                }
++                            )
++                        }
++                    }
++
++                    // Reorder, Delete, Rename (only in edit mode)
++                    if (isEditMode) {
++                        Row(
++                            modifier = Modifier
++                                .fillMaxWidth()
++                                .background(
++                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
++                                    RoundedCornerShape(8.dp)
++                                )
++                                .padding(horizontal = 8.dp, vertical = 4.dp),
++                            horizontalArrangement = Arrangement.SpaceBetween,
++                            verticalAlignment = Alignment.CenterVertically
++                        ) {
++                            Row(verticalAlignment = Alignment.CenterVertically) {
++                                Text(
++                                    text = "Page Actions: ",
++                                    style = MaterialTheme.typography.bodySmall,
++                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
++                                    fontWeight = FontWeight.Bold
++                                )
++                                Spacer(Modifier.width(4.dp))
++                                IconButton(
++                                    onClick = { pageToRename = activePage },
++                                    modifier = Modifier.size(32.dp).testTag("rename_page_btn")
++                                ) {
++                                    Icon(
++                                        Icons.Rounded.Edit,
++                                        contentDescription = "Rename current page",
++                                        modifier = Modifier.size(16.dp)
++                                    )
++                                }
++                                IconButton(
++                                    onClick = { viewModel.deletePage(activePage.id) },
++                                    enabled = activeWS.macroPages.size > 1,
++                                    modifier = Modifier.size(32.dp).testTag("delete_page_btn")
++                                ) {
++                                    Icon(
++                                        Icons.Rounded.Delete,
++                                        contentDescription = "Delete current page",
++                                        modifier = Modifier.size(16.dp)
++                                    )
++                                }
++                            }
++                            Row {
++                                IconButton(
++                                    onClick = { viewModel.reorderPageUp(activePage.id) },
++                                    modifier = Modifier.size(32.dp).testTag("move_page_up_btn")
++                                ) {
++                                    Icon(
++                                        Icons.Rounded.ArrowLeft,
++                                        contentDescription = "Move page left",
++                                        modifier = Modifier.size(20.dp)
++                                    )
++                                }
++                                IconButton(
++                                    onClick = { viewModel.reorderPageDown(activePage.id) },
++                                    modifier = Modifier.size(32.dp).testTag("move_page_down_btn")
++                                ) {
++                                    Icon(
++                                        Icons.Rounded.ArrowRight,
++                                        contentDescription = "Move page right",
++                                        modifier = Modifier.size(20.dp)
++                                    )
++                                }
++                            }
++                        }
++                    }
++                }
++            }
++
++            // Interactive Grid
++            item {
++                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
++                    Text(
++                        text = "GRID SURFACE",
++                        style = MaterialTheme.typography.labelSmall,
++                        color = MaterialTheme.colorScheme.primary,
++                        fontWeight = FontWeight.Bold
++                    )
++                    ButtonGrid(
++                        page = activePage,
++                        gridSize = activeWS.gridSize,
++                        isEditMode = isEditMode,
++                        isConnected = state.isConnected,
++                        onButtonTap = { btn ->
++                            if (isEditMode) {
++                                buttonToCustomize = btn
++                            } else if (state.isConnected) {
++                                viewModel.triggerAction(btn.action)
++                            }
++                        },
++                        onButtonPressStart = { btn ->
++                            if (!isEditMode && state.isConnected && btn.repeatEnabled) {
++                                viewModel.startRepeatAction(btn.action)
++                            }
++                        },
++                        onButtonPressEnd = { btn ->
++                            if (!isEditMode && state.isConnected && btn.repeatEnabled) {
++                                viewModel.stopRepeatAction()
++                            }
++                        },
++                        onButtonLongPress = { btn ->
++                            if (!isEditMode && state.isConnected && btn.longPressAction != null) {
++                                viewModel.triggerAction(btn.longPressAction)
++                            }
++                        }
++                    )
++                }
++            }
++        }
++    }
++
++    // Add Page Dialog
++    if (showAddPageDialog) {
++        var newPageName by remember { mutableStateOf("") }
++        AlertDialog(
++            onDismissRequest = { showAddPageDialog = false },
++            title = { Text("Add Page", fontWeight = FontWeight.Bold) },
++            text = {
++                OutlinedTextField(
++                    value = newPageName,
++                    onValueChange = { newPageName = it },
++                    label = { Text("Page Name") },
++                    singleLine = true,
++                    modifier = Modifier.fillMaxWidth().testTag("add_page_input")
++                )
++            },
++            confirmButton = {
++                TextButton(
++                    onClick = {
++                        if (newPageName.isNotBlank()) {
++                            viewModel.addPage(newPageName)
++                        }
++                        showAddPageDialog = false
++                    },
++                    modifier = Modifier.testTag("add_page_confirm")
++                ) {
++                    Text("Add")
++                }
++            },
++            dismissButton = {
++                TextButton(onClick = { showAddPageDialog = false }) {
++                    Text("Cancel")
++                }
++            }
++        )
++    }
++
++    // Rename Page Dialog
++    pageToRename?.let { page ->
++        var newName by remember { mutableStateOf(page.name) }
++        AlertDialog(
++            onDismissRequest = { pageToRename = null },
++            title = { Text("Rename Page", fontWeight = FontWeight.Bold) },
++            text = {
++                OutlinedTextField(
++                    value = newName,
++                    onValueChange = { newName = it },
++                    label = { Text("New Name") },
++                    singleLine = true,
++                    modifier = Modifier.fillMaxWidth().testTag("rename_page_input")
++                )
++            },
++            confirmButton = {
++                TextButton(
++                    onClick = {
++                        if (newName.isNotBlank()) {
++                            viewModel.renamePage(page.id, newName)
++                        }
++                        pageToRename = null
++                    },
++                    modifier = Modifier.testTag("rename_page_confirm")
++                ) {
++                    Text("Save")
++                }
++            },
++            dismissButton = {
++                TextButton(onClick = { pageToRename = null }) {
++                    Text("Cancel")
++                }
++            }
++        )
++    }
++
++    // Customization Dialog
++    buttonToCustomize?.let { btn ->
++        if (activePage != null) {
++            ButtonCustomizerDialog(
++                button = btn,
++                onDismiss = { buttonToCustomize = null },
++                onSave = { updated ->
++                    viewModel.updateButton(activePage.id, updated)
++                    buttonToCustomize = null
++                }
++            )
++        }
+     }
+ }
+ 
+ @Composable
+-fun ControlModuleCard(module: ControlModule, onClick: () -> Unit, modifier: Modifier = Modifier) {
+-    val spacing = LocalSpacing.current
+-    val icon = when (module.iconName) { "apps" -> Icons.Rounded.Apps; "gesture" -> Icons.Rounded.Gesture; "track_changes" -> Icons.Rounded.Category; "grid_view" -> Icons.Rounded.GridView; "tune" -> Icons.Rounded.Tune; else -> Icons.Rounded.Category }
+-    OniCard(modifier = modifier.fillMaxWidth().testTag("control_card_${module.id}"), onClick = onClick) {
+-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+-                Box(Modifier.size(44.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) }
+-                Spacer(Modifier.width(spacing.medium)); Column { Text(module.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface); Spacer(Modifier.height(2.dp)); Text(module.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
++fun ConnectionBanner(
++    isConnected: Boolean,
++    connectionType: String,
++    hostName: String?,
++    modifier: Modifier = Modifier
++) {
++    Card(
++        modifier = modifier
++            .fillMaxWidth()
++            .testTag("connection_banner"),
++        colors = CardDefaults.cardColors(
++            containerColor = if (isConnected) {
++                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
++            } else {
++                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+             }
+-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+-                Box(Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape).padding(horizontal = 8.dp, vertical = 2.dp)) { Text(module.activeState.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+-                Text(module.lastSync, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
++        ),
++        border = BorderStroke(
++            1.dp,
++            if (isConnected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
++        )
++    ) {
++        Row(
++            modifier = Modifier
++                .fillMaxWidth()
++                .padding(12.dp),
++            verticalAlignment = Alignment.CenterVertically
++        ) {
++            Icon(
++                imageVector = if (isConnected) Icons.Rounded.Wifi else Icons.Rounded.WifiOff,
++                contentDescription = null,
++                tint = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
++                modifier = Modifier.size(24.dp)
++            )
++            Spacer(Modifier.width(12.dp))
++            Column {
++                Text(
++                    text = if (isConnected) "Connected to Windows Host" else "Disconnected from Companion",
++                    style = MaterialTheme.typography.bodyMedium,
++                    fontWeight = FontWeight.Bold,
++                    color = if (isConnected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
++                )
++                if (isConnected) {
++                    Text(
++                        text = "Host: ${hostName ?: "Unknown"} • Mode: $connectionType",
++                        style = MaterialTheme.typography.bodySmall,
++                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
++                    )
++                } else {
++                    Text(
++                        text = "Launch companion & link over local WiFi/USB",
++                        style = MaterialTheme.typography.bodySmall,
++                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
++                    )
++                }
+             }
+         }
+     }
+ }
+ 
+ @Composable
+-fun ControlConfigSimulatorDialog(module: ControlModule, onDismiss: () -> Unit, onSaveState: (String) -> Unit) {
+-    var sizeSliderVal by remember { mutableFloatStateOf(45f) }
+-    var opacitySliderVal by remember { mutableFloatStateOf(80f) }
+-    var activeSubMode by remember { mutableStateOf(module.activeState) }
+-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Configure ${module.title}", fontWeight = FontWeight.Bold) }, text = {
+-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+-            Text("Simulating Live Input / Mapping controls:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+-            when (module.id) {
+-                "brush_controls" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+-                    Text("Brush Size: ${sizeSliderVal.toInt()} px", style = MaterialTheme.typography.bodyMedium); Slider(value = sizeSliderVal, onValueChange = { sizeSliderVal = it }, valueRange = 1f..100f, modifier = Modifier.fillMaxWidth())
+-                    Spacer(Modifier.height(4.dp)); Text("Brush Opacity: ${opacitySliderVal.toInt()}%", style = MaterialTheme.typography.bodyMedium); Slider(value = opacitySliderVal, onValueChange = { opacitySliderVal = it }, valueRange = 1f..100f, modifier = Modifier.fillMaxWidth())
+-                }
+-                "macro_pad" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+-                    Text("Configure Button Layout", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("Standard", "Advanced", "Color").forEach { mode ->
+-                        Box(Modifier.weight(1f).background(if (activeSubMode.contains(mode)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small).clickable { activeSubMode = "$mode Mode" }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) { Text(mode, color = if (activeSubMode.contains(mode)) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
+-                    } }
+-                }
+-                "gesture_pad" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+-                    Text("Sensitivity Control", style = MaterialTheme.typography.bodyMedium); Slider(value = sizeSliderVal, onValueChange = { sizeSliderVal = it }, valueRange = 10f..100f)
+-                    OniButton(text = "Toggle Precision Lock", onClick = { activeSubMode = if (activeSubMode.contains("Lock ON")) "Precision Lock OFF" else "Precision Lock ON" }, isPrimary = true, modifier = Modifier.fillMaxWidth())
+-                }
+-                else -> Text("This module connects live parameters such as radial wheels or shortcuts. Live values sync seamlessly to Clip Studio Paint over local transport protocols.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
++fun ButtonGrid(
++    page: MacroPage,
++    gridSize: Int,
++    isEditMode: Boolean,
++    isConnected: Boolean,
++    onButtonTap: (MacroButton) -> Unit,
++    onButtonPressStart: (MacroButton) -> Unit,
++    onButtonPressEnd: (MacroButton) -> Unit,
++    onButtonLongPress: (MacroButton) -> Unit,
++    modifier: Modifier = Modifier
++) {
++    val maxButtons = gridSize * gridSize
++    val sortedButtons = (0 until maxButtons).map { pos ->
++        page.buttons.find { it.position == pos } ?: MacroButton(
++            id = "${page.id}_btn_${pos}",
++            position = pos,
++            label = "Empty",
++            iconName = "smart_button",
++            action = MacroAction.Undo,
++            enabled = false
++        )
++    }
++
++    LazyVerticalGrid(
++        columns = GridCells.Fixed(gridSize),
++        modifier = modifier
++            .fillMaxWidth()
++            .aspectRatio(1f)
++            .testTag("macro_grid"),
++        verticalArrangement = Arrangement.spacedBy(8.dp),
++        horizontalArrangement = Arrangement.spacedBy(8.dp)
++    ) {
++        items(sortedButtons, key = { it.id }) { btn ->
++            MacroGridButton(
++                button = btn,
++                isEditMode = isEditMode,
++                isConnected = isConnected,
++                onTap = { onButtonTap(btn) },
++                onPressStart = { onButtonPressStart(btn) },
++                onPressEnd = { onButtonPressEnd(btn) },
++                onLongPress = { onButtonLongPress(btn) }
++            )
++        }
++    }
++}
++
++@Composable
++fun MacroGridButton(
++    button: MacroButton,
++    isEditMode: Boolean,
++    isConnected: Boolean,
++    onTap: () -> Unit,
++    onPressStart: () -> Unit,
++    onPressEnd: () -> Unit,
++    onLongPress: () -> Unit,
++    modifier: Modifier = Modifier
++) {
++    val isAvailable = button.enabled && !button.hidden
++    val visualAlpha = if (isAvailable) 1f else 0.4f
++    val isClickable = isEditMode || (isConnected && isAvailable)
++
++    val cardBorder = if (button.hidden) {
++        BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
++    } else {
++        null
++    }
++
++    val cardColor = when {
++        button.hidden -> MaterialTheme.colorScheme.surface.copy(alpha = 0.2f)
++        !button.enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
++        else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
++    }
++
++    Card(
++        modifier = modifier
++            .fillMaxSize()
++            .aspectRatio(1f)
++            .alpha(visualAlpha)
++            .border(
++                width = if (isEditMode) 1.dp else 0.dp,
++                color = if (isEditMode) MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f) else Color.Transparent,
++                shape = RoundedCornerShape(12.dp)
++            )
++            .pointerInput(isClickable) {
++                if (isClickable) {
++                    detectTapGestures(
++                        onLongPress = { if (!isEditMode) onLongPress() },
++                        onTap = { onTap() },
++                        onPress = {
++                            try {
++                                onPressStart()
++                                awaitRelease()
++                            } finally {
++                                onPressEnd()
++                            }
++                        }
++                    )
++                }
++            }
++            .testTag("macro_button_${button.position}"),
++        colors = CardDefaults.cardColors(containerColor = cardColor),
++        border = cardBorder
++    ) {
++        Box(
++            modifier = Modifier.fillMaxSize(),
++            contentAlignment = Alignment.Center
++        ) {
++            Column(
++                horizontalAlignment = Alignment.CenterHorizontally,
++                verticalArrangement = Arrangement.Center,
++                modifier = Modifier.padding(4.dp)
++            ) {
++                Icon(
++                    imageVector = getMacroIcon(button.iconName),
++                    contentDescription = null,
++                    tint = if (isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
++                    modifier = Modifier.size(24.dp)
++                )
++                Spacer(Modifier.height(4.dp))
++                Text(
++                    text = button.label,
++                    style = MaterialTheme.typography.bodySmall,
++                    fontWeight = FontWeight.Bold,
++                    textAlign = TextAlign.Center,
++                    maxLines = 1,
++                    overflow = TextOverflow.Ellipsis,
++                    color = if (isAvailable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
++                )
++            }
++
++            if (isEditMode) {
++                Box(
++                    modifier = Modifier
++                        .align(Alignment.TopEnd)
++                        .padding(4.dp)
++                ) {
++                    Icon(
++                        Icons.Rounded.Edit,
++                        contentDescription = "Edit button",
++                        modifier = Modifier.size(12.dp),
++                        tint = MaterialTheme.colorScheme.secondary
++                    )
++                }
++            }
++        }
++    }
++}
++
++@OptIn(ExperimentalLayoutApi::class)
++@Composable
++fun ButtonCustomizerDialog(
++    button: MacroButton,
++    onDismiss: () -> Unit,
++    onSave: (MacroButton) -> Unit
++) {
++    var label by remember { mutableStateOf(button.label) }
++    var iconName by remember { mutableStateOf(button.iconName) }
++    var actionType by remember { mutableStateOf(getActionTypeString(button.action)) }
++    var shortcutKeysText by remember { mutableStateOf(getShortcutKeysString(button.action)) }
++    var longPressActionType by remember { mutableStateOf(button.longPressAction?.let { getActionTypeString(it) } ?: "None") }
++    var repeatEnabled by remember { mutableStateOf(button.repeatEnabled) }
++    var enabled by remember { mutableStateOf(button.enabled) }
++    var hidden by remember { mutableStateOf(button.hidden) }
++
++    val actionOptions = listOf("Undo", "Redo", "Save", "Brush", "Eraser", "Fill", "Selection", "Transform", "Copy", "Paste", "CustomShortcut")
++    val longPressOptions = listOf("None", "Undo", "Redo", "Save", "Brush", "Eraser", "Fill", "Selection", "Transform", "Copy", "Paste")
++    val iconOptions = listOf("undo", "redo", "save", "brush", "eraser", "fill", "select", "transform", "copy", "paste", "shortcut")
++
++    var showActionMenu by remember { mutableStateOf(false) }
++    var showLongPressMenu by remember { mutableStateOf(false) }
++    var showIconMenu by remember { mutableStateOf(false) }
++
++    Dialog(onDismissRequest = onDismiss) {
++        Card(
++            modifier = Modifier
++                .fillMaxWidth()
++                .testTag("customizer_dialog"),
++            shape = RoundedCornerShape(16.dp),
++            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
++        ) {
++            LazyColumn(
++                modifier = Modifier
++                    .fillMaxWidth()
++                    .padding(16.dp),
++                verticalArrangement = Arrangement.spacedBy(12.dp)
++            ) {
++                item {
++                    Text(
++                        text = "Customize Button ${button.position + 1}",
++                        style = MaterialTheme.typography.titleMedium,
++                        fontWeight = FontWeight.Bold,
++                        color = MaterialTheme.colorScheme.onSurface
++                    )
++                }
++
++                // Label Text
++                item {
++                    OutlinedTextField(
++                        value = label,
++                        onValueChange = { label = it },
++                        label = { Text("Label") },
++                        singleLine = true,
++                        modifier = Modifier.fillMaxWidth().testTag("customizer_label")
++                    )
++                }
++
++                // Icon Selection
++                item {
++                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
++                        Text("Button Icon", style = MaterialTheme.typography.labelSmall)
++                        Box(modifier = Modifier.fillMaxWidth()) {
++                            OutlinedCard(
++                                onClick = { showIconMenu = true },
++                                modifier = Modifier.fillMaxWidth().testTag("customizer_icon_selector")
++                            ) {
++                                Row(
++                                    modifier = Modifier.padding(12.dp),
++                                    verticalAlignment = Alignment.CenterVertically
++                                ) {
++                                    Icon(getMacroIcon(iconName), null, modifier = Modifier.size(20.dp))
++                                    Spacer(Modifier.width(8.dp))
++                                    Text(iconName.uppercase())
++                                    Spacer(Modifier.weight(1f))
++                                    Icon(Icons.Rounded.KeyboardArrowDown, null)
++                                }
++                            }
++                            DropdownMenu(
++                                expanded = showIconMenu,
++                                onDismissRequest = { showIconMenu = false }
++                            ) {
++                                iconOptions.forEach { name ->
++                                    DropdownMenuItem(
++                                        leadingIcon = { Icon(getMacroIcon(name), null, modifier = Modifier.size(16.dp)) },
++                                        text = { Text(name.uppercase()) },
++                                        onClick = {
++                                            iconName = name
++                                            showIconMenu = false
++                                        }
++                                    )
++                                }
++                            }
++                        }
++                    }
++                }
++
++                // Primary Action Selection
++                item {
++                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
++                        Text("Trigger Action", style = MaterialTheme.typography.labelSmall)
++                        Box(modifier = Modifier.fillMaxWidth()) {
++                            OutlinedCard(
++                                onClick = { showActionMenu = true },
++                                modifier = Modifier.fillMaxWidth().testTag("customizer_action_selector")
++                            ) {
++                                Row(
++                                    modifier = Modifier.padding(12.dp),
++                                    verticalAlignment = Alignment.CenterVertically
++                                ) {
++                                    Text(actionType)
++                                    Spacer(Modifier.weight(1f))
++                                    Icon(Icons.Rounded.KeyboardArrowDown, null)
++                                }
++                            }
++                            DropdownMenu(
++                                expanded = showActionMenu,
++                                onDismissRequest = { showActionMenu = false }
++                            ) {
++                                actionOptions.forEach { opt ->
++                                    DropdownMenuItem(
++                                        text = { Text(opt) },
++                                        onClick = {
++                                            actionType = opt
++                                            showActionMenu = false
++                                        }
++                                    )
++                                }
++                            }
++                        }
++                    }
++                }
++
++                // Custom Shortcut Textbox
++                if (actionType == "CustomShortcut") {
++                    item {
++                        OutlinedTextField(
++                            value = shortcutKeysText,
++                            onValueChange = { shortcutKeysText = it },
++                            label = { Text("Keys (comma separated, e.g. Ctrl,Alt,Z)") },
++                            singleLine = true,
++                            modifier = Modifier.fillMaxWidth().testTag("customizer_shortcut_input")
++                        )
++                    }
++                }
++
++                // Long Press Action
++                item {
++                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
++                        Text("Long Press Action", style = MaterialTheme.typography.labelSmall)
++                        Box(modifier = Modifier.fillMaxWidth()) {
++                            OutlinedCard(
++                                onClick = { showLongPressMenu = true },
++                                modifier = Modifier.fillMaxWidth()
++                            ) {
++                                Row(
++                                    modifier = Modifier.padding(12.dp),
++                                    verticalAlignment = Alignment.CenterVertically
++                                ) {
++                                    Text(longPressActionType)
++                                    Spacer(Modifier.weight(1f))
++                                    Icon(Icons.Rounded.KeyboardArrowDown, null)
++                                }
++                            }
++                            DropdownMenu(
++                                expanded = showLongPressMenu,
++                                onDismissRequest = { showLongPressMenu = false }
++                            ) {
++                                longPressOptions.forEach { opt ->
++                                    DropdownMenuItem(
++                                        text = { Text(opt) },
++                                        onClick = {
++                                            longPressActionType = opt
++                                            showLongPressMenu = false
++                                        }
++                                    )
++                                }
++                            }
++                        }
++                    }
++                }
++
++                // Repeat held action check
++                item {
++                    Row(
++                        modifier = Modifier.fillMaxWidth(),
++                        verticalAlignment = Alignment.CenterVertically
++                    ) {
++                        Checkbox(
++                            checked = repeatEnabled,
++                            onCheckedChange = { repeatEnabled = it },
++                            modifier = Modifier.testTag("customizer_repeat_check")
++                        )
++                        Text("Auto-Repeat command when held down", style = MaterialTheme.typography.bodyMedium)
++                    }
++                }
++
++                // Enabled and Hidden checkboxes
++                item {
++                    Row(
++                        modifier = Modifier.fillMaxWidth(),
++                        horizontalArrangement = Arrangement.spacedBy(16.dp),
++                        verticalAlignment = Alignment.CenterVertically
++                    ) {
++                        Row(verticalAlignment = Alignment.CenterVertically) {
++                            Checkbox(checked = enabled, onCheckedChange = { enabled = it })
++                            Text("Active", style = MaterialTheme.typography.bodyMedium)
++                        }
++                        Row(verticalAlignment = Alignment.CenterVertically) {
++                            Checkbox(checked = hidden, onCheckedChange = { hidden = it })
++                            Text("Hidden", style = MaterialTheme.typography.bodyMedium)
++                        }
++                    }
++                }
++
++                // Confirm and Cancel buttons
++                item {
++                    Row(
++                        modifier = Modifier.fillMaxWidth(),
++                        horizontalArrangement = Arrangement.End
++                    ) {
++                        TextButton(onClick = onDismiss) {
++                            Text("Cancel")
++                        }
++                        Spacer(Modifier.width(8.dp))
++                        Button(
++                            onClick = {
++                                val primAction = parseActionString(actionType, shortcutKeysText)
++                                val longAction = if (longPressActionType == "None") null else parseActionString(longPressActionType, "")
++                                val updated = button.copy(
++                                    label = label,
++                                    iconName = iconName,
++                                    action = primAction,
++                                    longPressAction = longAction,
++                                    repeatEnabled = repeatEnabled,
++                                    enabled = enabled,
++                                    hidden = hidden
++                                )
++                                onSave(updated)
++                            },
++                            modifier = Modifier.testTag("customizer_save_btn")
++                        ) {
++                            Text("Save")
++                        }
++                    }
++                }
+             }
+         }
+-    }, confirmButton = { TextButton(onClick = { onSaveState(activeSubMode) }) { Text("Save Layout") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
++    }
+ }
++
++// Helpers
++fun getMacroIcon(iconName: String): ImageVector {
++    return when (iconName.lowercase()) {
++        "undo" -> Icons.Rounded.Undo
++        "redo" -> Icons.Rounded.Redo
++        "save" -> Icons.Rounded.Save
++        "brush" -> Icons.Rounded.Brush
++        "eraser" -> Icons.Rounded.CleaningServices
++        "fill" -> Icons.Rounded.FormatColorFill
++        "select" -> Icons.Rounded.SelectAll
++        "transform" -> Icons.Rounded.Transform
++        "copy" -> Icons.Rounded.ContentCopy
++        "paste" -> Icons.Rounded.ContentPaste
++        "shortcut" -> Icons.Rounded.Keyboard
++        else -> Icons.Rounded.SmartButton
++    }
++}
++
++fun getActionTypeString(action: MacroAction): String {
++    return when (action) {
++        MacroAction.Undo -> "Undo"
++        MacroAction.Redo -> "Redo"
++        MacroAction.Save -> "Save"
++        MacroAction.Brush -> "Brush"
++        MacroAction.Eraser -> "Eraser"
++        MacroAction.Fill -> "Fill"
++        MacroAction.Selection -> "Selection"
++        MacroAction.Transform -> "Transform"
++        MacroAction.Copy -> "Copy"
++        MacroAction.Paste -> "Paste"
++        is MacroAction.CustomShortcut -> "CustomShortcut"
++    }
++}
++
++fun getShortcutKeysString(action: MacroAction): String {
++    return when (action) {
++        is MacroAction.CustomShortcut -> (action.modifiers + action.keys).joinToString(",")
++        else -> ""
++    }
++}
++
++fun parseActionString(type: String, keysText: String): MacroAction {
++    return when (type) {
++        "Undo" -> MacroAction.Undo
++        "Redo" -> MacroAction.Redo
++        "Save" -> MacroAction.Save
++        "Brush" -> MacroAction.Brush
++        "Eraser" -> MacroAction.Eraser
++        "Fill" -> MacroAction.Fill
++        "Selection" -> MacroAction.Selection
++        "Transform" -> MacroAction.Transform
++        "Copy" -> MacroAction.Copy
++        "Paste" -> MacroAction.Paste
++        else -> {
++            val tokens = keysText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
++            val modifiers = tokens.filter { it.lowercase() in listOf("ctrl", "alt", "shift", "meta") }
++            val keys = tokens.filter { it.lowercase() notIn listOf("ctrl", "alt", "shift", "meta") }
++            MacroAction.CustomShortcut(keys = keys, modifiers = modifiers)
++        }
++    }
++}
++
++private infix fun String.notIn(list: List<String>): Boolean = !list.contains(this)
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/controls/viewmodel/ControlsViewModel.kt b/app/src/main/java/com/onimeno/onicanvas/feature/controls/viewmodel/ControlsViewModel.kt
+index dabbd40..7412553 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/controls/viewmodel/ControlsViewModel.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/controls/viewmodel/ControlsViewModel.kt
+@@ -2,93 +2,314 @@ package com.onimeno.onicanvas.feature.controls.viewmodel
+ 
+ import androidx.lifecycle.ViewModel
+ import androidx.lifecycle.viewModelScope
+-import com.onimeno.onicanvas.feature.controls.state.ControlModule
++import com.onimeno.onicanvas.core.designsystem.components.OniStatus
++import com.onimeno.onicanvas.feature.connection.data.ConnectionRepository
+ import com.onimeno.onicanvas.feature.controls.state.ControlsUiState
++import com.onimeno.onicanvas.feature.workspace.data.WorkspaceRepository
++import com.onimeno.onicanvas.feature.workspace.state.MacroAction
++import com.onimeno.onicanvas.feature.workspace.state.MacroButton
++import com.onimeno.onicanvas.feature.workspace.state.MacroPage
++import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
++import kotlinx.coroutines.Job
+ import kotlinx.coroutines.delay
+ import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.SharingStarted
+ import kotlinx.coroutines.flow.StateFlow
+-import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.flow.combine
++import kotlinx.coroutines.flow.stateIn
+ import kotlinx.coroutines.launch
+ 
+-class ControlsViewModel : ViewModel() {
+-
+-    private val _uiState = MutableStateFlow<ControlsUiState>(ControlsUiState.Loading)
+-    val uiState: StateFlow<ControlsUiState> = _uiState.asStateFlow()
+-
+-    private val allModules = mutableListOf(
+-        ControlModule(
+-            id = "macro_pad",
+-            title = "Macro Pad",
+-            description = "Customized layout for common paint macros (New Layer, Merge, Clear)",
+-            iconName = "apps",
+-            activeState = "Standard Mode",
+-            buttonCount = 12,
+-            lastSync = "Synced"
+-        ),
+-        ControlModule(
+-            id = "gesture_pad",
+-            title = "Gesture Pad",
+-            description = "Multi-touch canvas manipulation (Pinch to Zoom, Two-finger Rotate)",
+-            iconName = "gesture",
+-            activeState = "Precision Lock ON",
+-            buttonCount = 4,
+-            lastSync = "Synced"
+-        ),
+-        ControlModule(
+-            id = "radial_menu",
+-            title = "Radial Menu",
+-            description = "Thumb-friendly circular context wheel for fast tool switching",
+-            iconName = "track_changes",
+-            activeState = "8-sector Layout",
+-            buttonCount = 8,
+-            lastSync = "Modified"
+-        ),
+-        ControlModule(
+-            id = "shortcut_grid",
+-            title = "Shortcut Grid",
+-            description = "Traditional 4x4 keypad with visual icon labels for modifiers",
+-            iconName = "grid_view",
+-            activeState = "16 Buttons Map",
+-            buttonCount = 16,
+-            lastSync = "Synced"
+-        ),
+-        ControlModule(
+-            id = "brush_controls",
+-            title = "Brush Controls",
+-            description = "Horizontal precise slider controls for sizing, opacity, and hardness",
+-            iconName = "tune",
+-            activeState = "Advanced Sliders",
+-            buttonCount = 3,
+-            lastSync = "Synced"
+-        )
++class ControlsViewModel(
++    private val workspaceRepository: WorkspaceRepository,
++    private val connectionRepository: ConnectionRepository
++) : ViewModel() {
++
++    private val _activePageId = MutableStateFlow<String>("")
++
++    private var repeatJob: Job? = null
++
++    val uiState: StateFlow<ControlsUiState> = combine(
++        workspaceRepository.workspaces,
++        workspaceRepository.activeWorkspace,
++        connectionRepository.state,
++        _activePageId
++    ) { workspaces, activeWS, conn, pageId ->
++        if (activeWS == null) {
++            ControlsUiState.Loading
++        } else {
++            val resolvedPageId = if (pageId.isEmpty() || activeWS.macroPages.none { it.id == pageId }) {
++                activeWS.macroPages.firstOrNull()?.id ?: ""
++            } else {
++                pageId
++            }
++            if (resolvedPageId != pageId) {
++                _activePageId.value = resolvedPageId
++            }
++
++            ControlsUiState.Success(
++                activeWorkspace = activeWS,
++                availableWorkspaces = workspaces,
++                activePageId = resolvedPageId,
++                isConnected = conn.status == OniStatus.SUCCESS,
++                connectionType = conn.transportType,
++                activeHostName = conn.activeHostName
++            )
++        }
++    }.stateIn(
++        scope = viewModelScope,
++        started = SharingStarted.WhileSubscribed(5000),
++        initialValue = ControlsUiState.Loading
+     )
+ 
+-    init {
+-        loadControls()
++    fun setActiveWorkspace(id: String) {
++        viewModelScope.launch {
++            workspaceRepository.setActiveWorkspaceId(id)
++        }
++    }
++
++    fun updateGridSize(newSize: Int) {
++        val currentWorkspace = getActiveWorkspaceItem() ?: return
++        if (newSize !in 2..5) return
++
++        val updatedPages = currentWorkspace.macroPages.map { page ->
++            val maxButtons = newSize * newSize
++            val currentButtons = page.buttons.toMutableList()
++
++            val actionsList = listOf(
++                Pair("Undo", MacroAction.Undo),
++                Pair("Redo", MacroAction.Redo),
++                Pair("Save", MacroAction.Save),
++                Pair("Brush", MacroAction.Brush),
++                Pair("Eraser", MacroAction.Eraser),
++                Pair("Fill", MacroAction.Fill),
++                Pair("Select", MacroAction.Selection),
++                Pair("Transform", MacroAction.Transform),
++                Pair("Copy", MacroAction.Copy),
++                Pair("Paste", MacroAction.Paste)
++            )
++
++            val adjustedButtons = if (currentButtons.size > maxButtons) {
++                currentButtons.filter { it.position < maxButtons }
++            } else if (currentButtons.size < maxButtons) {
++                val buttonsMap = currentButtons.associateBy { it.position }.toMutableMap()
++                for (pos in 0 until maxButtons) {
++                    if (!buttonsMap.containsKey(pos)) {
++                        val actionPair = actionsList[pos % actionsList.size]
++                        buttonsMap[pos] = MacroButton(
++                            id = "${page.id}_btn_${pos}",
++                            position = pos,
++                            label = actionPair.first,
++                            iconName = actionPair.first.lowercase(),
++                            action = actionPair.second,
++                            longPressAction = if (actionPair.second is MacroAction.Undo) MacroAction.Redo else null,
++                            repeatEnabled = false,
++                            enabled = true,
++                            hidden = false
++                        )
++                    }
++                }
++                buttonsMap.values.sortedBy { it.position }
++            } else {
++                page.buttons
++            }
++            page.copy(buttons = adjustedButtons)
++        }
++
++        viewModelScope.launch {
++            workspaceRepository.saveWorkspace(
++                currentWorkspace.copy(gridSize = newSize, macroPages = updatedPages)
++            )
++        }
++    }
++
++    fun addPage(name: String) {
++        val currentWorkspace = getActiveWorkspaceItem() ?: return
++        val newPageId = "page_${System.currentTimeMillis()}"
++        val size = currentWorkspace.gridSize
++        val maxButtons = size * size
++
++        val actionsList = listOf(
++            Pair("Undo", MacroAction.Undo),
++            Pair("Redo", MacroAction.Redo),
++            Pair("Save", MacroAction.Save),
++            Pair("Brush", MacroAction.Brush),
++            Pair("Eraser", MacroAction.Eraser),
++            Pair("Fill", MacroAction.Fill),
++            Pair("Select", MacroAction.Selection),
++            Pair("Transform", MacroAction.Transform),
++            Pair("Copy", MacroAction.Copy),
++            Pair("Paste", MacroAction.Paste)
++        )
++
++        val defaultButtons = (0 until maxButtons).map { pos ->
++            val actionPair = actionsList[pos % actionsList.size]
++            MacroButton(
++                id = "${newPageId}_btn_${pos}",
++                position = pos,
++                label = actionPair.first,
++                iconName = actionPair.first.lowercase(),
++                action = actionPair.second,
++                longPressAction = if (actionPair.second is MacroAction.Undo) MacroAction.Redo else null,
++                repeatEnabled = false,
++                enabled = true,
++                hidden = false
++            )
++        }
++
++        val newPage = MacroPage(
++            id = newPageId,
++            name = name,
++            orderIndex = currentWorkspace.macroPages.size,
++            buttons = defaultButtons
++        )
++
++        val updatedPages = currentWorkspace.macroPages + newPage
++        viewModelScope.launch {
++            workspaceRepository.saveWorkspace(
++                currentWorkspace.copy(macroPages = updatedPages)
++            )
++            _activePageId.value = newPageId
++        }
++    }
++
++    fun deletePage(pageId: String) {
++        val currentWorkspace = getActiveWorkspaceItem() ?: return
++        if (currentWorkspace.macroPages.size <= 1) return
++
++        val updatedPages = currentWorkspace.macroPages
++            .filter { it.id != pageId }
++            .mapIndexed { index, page -> page.copy(orderIndex = index) }
++
++        viewModelScope.launch {
++            workspaceRepository.saveWorkspace(
++                currentWorkspace.copy(macroPages = updatedPages)
++            )
++            if (_activePageId.value == pageId) {
++                _activePageId.value = updatedPages.firstOrNull()?.id ?: ""
++            }
++        }
++    }
++
++    fun renamePage(pageId: String, newName: String) {
++        val currentWorkspace = getActiveWorkspaceItem() ?: return
++        val updatedPages = currentWorkspace.macroPages.map { page ->
++            if (page.id == pageId) page.copy(name = newName) else page
++        }
++
++        viewModelScope.launch {
++            workspaceRepository.saveWorkspace(
++                currentWorkspace.copy(macroPages = updatedPages)
++            )
++        }
+     }
+ 
+-    fun loadControls() {
++    fun reorderPageUp(pageId: String) {
++        val currentWorkspace = getActiveWorkspaceItem() ?: return
++        val pages = currentWorkspace.macroPages
++        val index = pages.indexOfFirst { it.id == pageId }
++        if (index <= 0) return
++
++        val updatedPages = pages.toMutableList()
++        val temp = updatedPages[index]
++        updatedPages[index] = updatedPages[index - 1].copy(orderIndex = index)
++        updatedPages[index - 1] = temp.copy(orderIndex = index - 1)
++
+         viewModelScope.launch {
+-            _uiState.value = ControlsUiState.Loading
+-            delay(300)
+-            _uiState.value = ControlsUiState.Success(
+-                modules = allModules.toList(),
+-                currentProfileName = "Clip Studio Paint (Default)"
++            workspaceRepository.saveWorkspace(
++                currentWorkspace.copy(macroPages = updatedPages.sortedBy { it.orderIndex })
+             )
+         }
+     }
+ 
+-    fun toggleModuleState(id: String, newState: String) {
+-        val index = allModules.indexOfFirst { it.id == id }
+-        if (index != -1) {
+-            allModules[index] = allModules[index].copy(
+-                activeState = newState,
+-                lastSync = "Modified just now"
++    fun reorderPageDown(pageId: String) {
++        val currentWorkspace = getActiveWorkspaceItem() ?: return
++        val pages = currentWorkspace.macroPages
++        val index = pages.indexOfFirst { it.id == pageId }
++        if (index == -1 || index >= pages.lastIndex) return
++
++        val updatedPages = pages.toMutableList()
++        val temp = updatedPages[index]
++        updatedPages[index] = updatedPages[index + 1].copy(orderIndex = index)
++        updatedPages[index + 1] = temp.copy(orderIndex = index + 1)
++
++        viewModelScope.launch {
++            workspaceRepository.saveWorkspace(
++                currentWorkspace.copy(macroPages = updatedPages.sortedBy { it.orderIndex })
+             )
+-            _uiState.value = ControlsUiState.Success(
+-                modules = allModules.toList(),
+-                currentProfileName = "Clip Studio Paint (Default)"
++        }
++    }
++
++    fun updateButton(pageId: String, updatedButton: MacroButton) {
++        val currentWorkspace = getActiveWorkspaceItem() ?: return
++        val updatedPages = currentWorkspace.macroPages.map { page ->
++            if (page.id == pageId) {
++                val updatedButtons = page.buttons.map { btn ->
++                    if (btn.position == updatedButton.position) updatedButton else btn
++                }
++                page.copy(buttons = updatedButtons)
++            } else {
++                page
++            }
++        }
++
++        viewModelScope.launch {
++            workspaceRepository.saveWorkspace(
++                currentWorkspace.copy(macroPages = updatedPages)
+             )
+         }
+     }
++
++    fun selectPage(pageId: String) {
++        _activePageId.value = pageId
++    }
++
++    fun triggerAction(action: MacroAction) {
++        viewModelScope.launch {
++            sendActionCommand(action)
++        }
++    }
++
++    fun startRepeatAction(action: MacroAction) {
++        stopRepeatAction()
++        repeatJob = viewModelScope.launch {
++            while (true) {
++                sendActionCommand(action)
++                delay(100)
++            }
++        }
++    }
++
++    fun stopRepeatAction() {
++        repeatJob?.cancel()
++        repeatJob = null
++    }
++
++    private suspend fun sendActionCommand(action: MacroAction) {
++        when (action) {
++            MacroAction.Undo -> connectionRepository.commandService.undo()
++            MacroAction.Redo -> connectionRepository.commandService.redo()
++            MacroAction.Save -> connectionRepository.commandService.save()
++            MacroAction.Brush -> connectionRepository.commandService.brush()
++            MacroAction.Eraser -> connectionRepository.commandService.eraser()
++            MacroAction.Fill -> connectionRepository.commandService.fill()
++            MacroAction.Selection -> connectionRepository.commandService.selection()
++            MacroAction.Transform -> connectionRepository.commandService.transform()
++            MacroAction.Copy -> connectionRepository.commandService.copy()
++            MacroAction.Paste -> connectionRepository.commandService.paste()
++            is MacroAction.CustomShortcut -> {
++                val allKeys = action.modifiers + action.keys
++                connectionRepository.commandService.shortcut(allKeys)
++            }
++        }
++    }
++
++    private fun getActiveWorkspaceItem(): WorkspaceItem? {
++        val successState = uiState.value as? ControlsUiState.Success
++        return successState?.activeWorkspace
++    }
++
++    override fun onCleared() {
++        super.onCleared()
++        stopRepeatAction()
++    }
+ }
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/controls/viewmodel/ControlsViewModelFactory.kt b/app/src/main/java/com/onimeno/onicanvas/feature/controls/viewmodel/ControlsViewModelFactory.kt
+new file mode 100644
+index 0000000..fadb6a7
+--- /dev/null
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/controls/viewmodel/ControlsViewModelFactory.kt
+@@ -0,0 +1,17 @@
++package com.onimeno.onicanvas.feature.controls.viewmodel
++
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.ViewModelProvider
++import com.onimeno.onicanvas.feature.connection.data.ConnectionRepository
++import com.onimeno.onicanvas.feature.workspace.data.WorkspaceRepository
++
++class ControlsViewModelFactory(
++    private val workspaceRepository: WorkspaceRepository,
++    private val connectionRepository: ConnectionRepository
++) : ViewModelProvider.Factory {
++    @Suppress("UNCHECKED_CAST")
++    override fun <T : ViewModel> create(modelClass: Class<T>): T {
++        require(modelClass.isAssignableFrom(ControlsViewModel::class.java)) { "Unknown ViewModel class" }
++        return ControlsViewModel(workspaceRepository, connectionRepository) as T
++    }
++}
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/dashboard/data/DashboardRepository.kt b/app/src/main/java/com/onimeno/onicanvas/feature/dashboard/data/DashboardRepository.kt
+index d1a4d07..0753df4 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/dashboard/data/DashboardRepository.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/dashboard/data/DashboardRepository.kt
+@@ -5,8 +5,10 @@ import com.onimeno.onicanvas.feature.connection.data.ConnectionRepository
+ import com.onimeno.onicanvas.feature.dashboard.state.QuickActionItem
+ import com.onimeno.onicanvas.feature.dashboard.state.QuickActionType
+ import com.onimeno.onicanvas.feature.dashboard.state.WorkspaceSummary
++import com.onimeno.onicanvas.feature.workspace.data.WorkspaceRepository
+ import kotlinx.coroutines.flow.Flow
+-import kotlinx.coroutines.flow.map
++import kotlinx.coroutines.flow.combine
++import kotlinx.coroutines.flow.flowOf
+ 
+ data class DashboardData(
+     val deviceName: String,
+@@ -25,31 +27,38 @@ interface DashboardRepository {
+ }
+ 
+ class RealDashboardRepository(
+-    private val connectionRepository: ConnectionRepository
++    private val connectionRepository: ConnectionRepository,
++    private val workspaceRepository: WorkspaceRepository
+ ) : DashboardRepository {
+-    override fun getDashboardData(): Flow<DashboardData> =
+-        connectionRepository.state.map { connection ->
+-            DashboardData(
+-                deviceName = connection.activeHostName ?: "No device connected",
+-                connectionType = connection.transportType,
+-                connectionStatus = connection.status,
+-                activeSoftware = "Clip Studio Paint",
+-                activeWorkspace = "Manga / Illustration Layout",
+-                batteryLevel = 88,
+-                latencyMs = connection.latencyMs ?: 0,
+-                recentWorkspaces = recentWorkspaces,
+-                quickActions = quickActions
++    override fun getDashboardData(): Flow<DashboardData> = combine(
++        connectionRepository.state,
++        workspaceRepository.workspaces,
++        workspaceRepository.activeWorkspace
++    ) { connection, workspacesList, activeWS ->
++        val summaries = workspacesList.map { ws ->
++            WorkspaceSummary(
++                id = ws.id,
++                name = ws.name,
++                description = ws.description,
++                iconName = ws.iconName,
++                buttonCount = ws.gridSize * ws.gridSize
+             )
+-        }
++        }.take(4)
+ 
+-    private companion object {
+-        val recentWorkspaces = listOf(
+-            WorkspaceSummary("illust_layout", "Illustration Master", "Optimized for painting & detailing", "brush", 16),
+-            WorkspaceSummary("manga_layout", "Manga Page Setup", "Fast panel and line-art macros", "book", 12),
+-            WorkspaceSummary("sculpt_3d", "3D Sculpt Companion", "Camera rotation & brush size mapping", "cube", 20),
+-            WorkspaceSummary("sketch_pad", "Quick Sketch Layout", "Minimalist pad for raw concepts", "edit", 8)
++        DashboardData(
++            deviceName = connection.activeHostName ?: "No device connected",
++            connectionType = connection.transportType,
++            connectionStatus = connection.status,
++            activeSoftware = activeWS?.targetApp ?: "Clip Studio Paint",
++            activeWorkspace = activeWS?.name ?: "No Active Workspace",
++            batteryLevel = 88,
++            latencyMs = connection.latencyMs ?: 0,
++            recentWorkspaces = summaries,
++            quickActions = quickActions
+         )
++    }
+ 
++    companion object {
+         val quickActions = listOf(
+             QuickActionItem("Connect System", "Manage Companion Connection", "wifi", QuickActionType.CONNECT),
+             QuickActionItem("Macro Pad", "Trigger Keyboard Actions", "apps", QuickActionType.MACRO_PAD),
+@@ -61,7 +70,17 @@ class RealDashboardRepository(
+ }
+ 
+ class FakeDashboardRepository : DashboardRepository {
+-    private val delegate = RealDashboardRepository(ConnectionRepository())
+-
+-    override fun getDashboardData(): Flow<DashboardData> = delegate.getDashboardData()
++    override fun getDashboardData(): Flow<DashboardData> = flowOf(
++        DashboardData(
++            deviceName = "No device connected",
++            connectionType = "WIFI",
++            connectionStatus = OniStatus.OFFLINE,
++            activeSoftware = "Clip Studio Paint",
++            activeWorkspace = "Manga / Illustration Layout",
++            batteryLevel = 88,
++            latencyMs = 0,
++            recentWorkspaces = emptyList(),
++            quickActions = RealDashboardRepository.quickActions
++        )
++    )
+ }
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/settings/data/SettingsRepository.kt b/app/src/main/java/com/onimeno/onicanvas/feature/settings/data/SettingsRepository.kt
+index 3d35a32..90a94b3 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/settings/data/SettingsRepository.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/settings/data/SettingsRepository.kt
+@@ -22,6 +22,25 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
+         val ANIMATIONS_ENABLED = booleanPreferencesKey("animations_enabled")
+         val LANGUAGE = stringPreferencesKey("language")
+         val LAST_BACKUP_DATE = stringPreferencesKey("last_backup_date")
++        val ACTIVE_WORKSPACE_ID = stringPreferencesKey("active_workspace_id")
++    }
++
++    val activeWorkspaceIdFlow: Flow<String> = dataStore.data
++        .catch { exception ->
++            if (exception is IOException) {
++                emit(emptyPreferences())
++            } else {
++                throw exception
++            }
++        }
++        .map { preferences ->
++            preferences[PreferencesKeys.ACTIVE_WORKSPACE_ID] ?: "illust_layout"
++        }
++
++    suspend fun updateActiveWorkspaceId(id: String) {
++        dataStore.edit { preferences ->
++            preferences[PreferencesKeys.ACTIVE_WORKSPACE_ID] = id
++        }
+     }
+ 
+     val settingsFlow: Flow<SettingsData> = dataStore.data
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/OniDatabase.kt b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/OniDatabase.kt
+index 26cd1a6..425353a 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/OniDatabase.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/OniDatabase.kt
+@@ -6,7 +6,7 @@ import com.onimeno.onicanvas.feature.profiles.data.ProfileEntity
+ 
+ @Database(
+     entities = [WorkspaceEntity::class, ProfileEntity::class],
+-    version = 2,
++    version = 3,
+     exportSchema = false
+ )
+ abstract class OniDatabase : RoomDatabase() {
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceEntity.kt b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceEntity.kt
+index 7f2b43f..b42f092 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceEntity.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceEntity.kt
+@@ -13,5 +13,7 @@ data class WorkspaceEntity(
+     val iconName: String,
+     val isFavorite: Boolean,
+     val lastUsed: String,
+-    val enabledModules: String
++    val enabledModules: String,
++    val gridSize: Int = 3,
++    val macroPagesJson: String = "[]"
+ )
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceEntityMapper.kt b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceEntityMapper.kt
+index 7d3f43f..37467c9 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceEntityMapper.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceEntityMapper.kt
+@@ -2,26 +2,91 @@ package com.onimeno.onicanvas.feature.workspace.data
+ 
+ import com.onimeno.onicanvas.feature.workspace.state.ControlModule
+ import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
++import com.onimeno.onicanvas.feature.workspace.state.MacroPage
++import com.onimeno.onicanvas.feature.workspace.state.MacroButton
++import com.onimeno.onicanvas.feature.workspace.state.MacroAction
+ import kotlinx.serialization.decodeFromString
+ import kotlinx.serialization.encodeToString
+ import kotlinx.serialization.json.Json
+ 
+ private val workspaceJson = Json { ignoreUnknownKeys = true }
+ 
+-fun WorkspaceEntity.toDomain(): WorkspaceItem = WorkspaceItem(
+-    id = id,
+-    name = name,
+-    description = description,
+-    targetApp = targetApp,
+-    buttonCount = buttonCount,
+-    iconName = iconName,
+-    isFavorite = isFavorite,
+-    lastUsed = lastUsed,
+-    enabledModules = runCatching {
++fun createDefaultPages(workspaceId: String, gridSize: Int): List<MacroPage> {
++    val pageId = "${workspaceId}_page_1"
++    val buttons = mutableListOf<MacroButton>()
++    val maxButtons = gridSize * gridSize
++    val actionsList = listOf(
++        Pair("Undo", MacroAction.Undo),
++        Pair("Redo", MacroAction.Redo),
++        Pair("Save", MacroAction.Save),
++        Pair("Brush", MacroAction.Brush),
++        Pair("Eraser", MacroAction.Eraser),
++        Pair("Fill", MacroAction.Fill),
++        Pair("Select", MacroAction.Selection),
++        Pair("Transform", MacroAction.Transform),
++        Pair("Copy", MacroAction.Copy),
++        Pair("Paste", MacroAction.Paste)
++    )
++    
++    for (i in 0 until maxButtons) {
++        val actionPair = actionsList.getOrNull(i % actionsList.size)
++        if (actionPair != null) {
++            buttons.add(
++                MacroButton(
++                    id = "${pageId}_btn_${i}",
++                    position = i,
++                    label = actionPair.first,
++                    iconName = actionPair.first.lowercase(),
++                    action = actionPair.second,
++                    longPressAction = if (actionPair.second is MacroAction.Undo) MacroAction.Redo else null,
++                    repeatEnabled = false,
++                    enabled = true,
++                    hidden = false
++                )
++            )
++        }
++    }
++    
++    return listOf(
++        MacroPage(
++            id = pageId,
++            name = "Default Page",
++            orderIndex = 0,
++            buttons = buttons
++        )
++    )
++}
++
++fun WorkspaceEntity.toDomain(): WorkspaceItem {
++    val decodedModules = runCatching {
+         workspaceJson.decodeFromString<List<String>>(enabledModules)
+             .mapNotNull { name -> ControlModule.values().find { it.name == name } }
+     }.getOrDefault(emptyList())
+-)
++
++    val decodedPages = runCatching {
++        workspaceJson.decodeFromString<List<MacroPage>>(macroPagesJson)
++    }.getOrDefault(emptyList())
++
++    val pages = if (decodedPages.isEmpty()) {
++        createDefaultPages(id, gridSize)
++    } else {
++        decodedPages
++    }
++
++    return WorkspaceItem(
++        id = id,
++        name = name,
++        description = description,
++        targetApp = targetApp,
++        buttonCount = buttonCount,
++        iconName = iconName,
++        isFavorite = isFavorite,
++        lastUsed = lastUsed,
++        enabledModules = decodedModules,
++        gridSize = gridSize,
++        macroPages = pages
++    )
++}
+ 
+ fun WorkspaceItem.toEntity(): WorkspaceEntity = WorkspaceEntity(
+     id = id,
+@@ -32,5 +97,7 @@ fun WorkspaceItem.toEntity(): WorkspaceEntity = WorkspaceEntity(
+     iconName = iconName,
+     isFavorite = isFavorite,
+     lastUsed = lastUsed,
+-    enabledModules = workspaceJson.encodeToString(enabledModules.map { it.name })
++    enabledModules = workspaceJson.encodeToString(enabledModules.map { it.name }),
++    gridSize = gridSize,
++    macroPagesJson = workspaceJson.encodeToString(macroPages)
+ )
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceRepository.kt b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceRepository.kt
+index 242e47b..deddbdd 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceRepository.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/data/WorkspaceRepository.kt
+@@ -1,16 +1,19 @@
+ package com.onimeno.onicanvas.feature.workspace.data
+ 
++import com.onimeno.onicanvas.feature.settings.data.SettingsRepository
+ import com.onimeno.onicanvas.feature.workspace.state.ControlModule
+ import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.SupervisorJob
+ import kotlinx.coroutines.flow.Flow
++import kotlinx.coroutines.flow.combine
+ import kotlinx.coroutines.flow.map
+ import kotlinx.coroutines.launch
+ 
+ class WorkspaceRepository(
+-    private val dao: WorkspaceDao
++    private val dao: WorkspaceDao,
++    private val settingsRepository: SettingsRepository
+ ) {
+ 
+     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+@@ -19,6 +22,16 @@ class WorkspaceRepository(
+         entities.map(WorkspaceEntity::toDomain)
+     }
+ 
++    val activeWorkspaceId: Flow<String> = settingsRepository.activeWorkspaceIdFlow
++
++    val activeWorkspace: Flow<WorkspaceItem?> = combine(workspaces, activeWorkspaceId) { list, activeId ->
++        list.find { it.id == activeId } ?: list.firstOrNull()
++    }
++
++    suspend fun setActiveWorkspaceId(id: String) {
++        settingsRepository.updateActiveWorkspaceId(id)
++    }
++
+     init {
+         repositoryScope.launch { ensureSeeded() }
+     }
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/state/MacroPadModel.kt b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/state/MacroPadModel.kt
+new file mode 100644
+index 0000000..e04b015
+--- /dev/null
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/state/MacroPadModel.kt
+@@ -0,0 +1,63 @@
++package com.onimeno.onicanvas.feature.workspace.state
++
++import kotlinx.serialization.Serializable
++
++@Serializable
++sealed interface MacroAction {
++    @Serializable
++    object Undo : MacroAction
++    
++    @Serializable
++    object Redo : MacroAction
++    
++    @Serializable
++    object Save : MacroAction
++    
++    @Serializable
++    object Brush : MacroAction
++    
++    @Serializable
++    object Eraser : MacroAction
++    
++    @Serializable
++    object Fill : MacroAction
++    
++    @Serializable
++    object Selection : MacroAction
++    
++    @Serializable
++    object Transform : MacroAction
++    
++    @Serializable
++    object Copy : MacroAction
++    
++    @Serializable
++    object Paste : MacroAction
++    
++    @Serializable
++    data class CustomShortcut(
++        val keys: List<String>,
++        val modifiers: List<String> = emptyList()
++    ) : MacroAction
++}
++
++@Serializable
++data class MacroButton(
++    val id: String,
++    val position: Int,
++    val label: String,
++    val iconName: String,
++    val action: MacroAction,
++    val longPressAction: MacroAction? = null,
++    val repeatEnabled: Boolean = false,
++    val enabled: Boolean = true,
++    val hidden: Boolean = false
++)
++
++@Serializable
++data class MacroPage(
++    val id: String,
++    val name: String,
++    val orderIndex: Int,
++    val buttons: List<MacroButton> = emptyList()
++)
+diff --git a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/state/WorkspaceUiState.kt b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/state/WorkspaceUiState.kt
+index a50c929..1343bca 100644
+--- a/app/src/main/java/com/onimeno/onicanvas/feature/workspace/state/WorkspaceUiState.kt
++++ b/app/src/main/java/com/onimeno/onicanvas/feature/workspace/state/WorkspaceUiState.kt
+@@ -17,7 +17,9 @@ data class WorkspaceItem(
+     val iconName: String,
+     val isFavorite: Boolean = false,
+     val lastUsed: String,
+-    val enabledModules: List<ControlModule> = ControlModule.values().toList()
++    val enabledModules: List<ControlModule> = ControlModule.values().toList(),
++    val gridSize: Int = 3,
++    val macroPages: List<MacroPage> = emptyList()
+ )
+ 
+ sealed interface WorkspaceUiState {

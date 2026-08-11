@@ -1,5 +1,6 @@
 package com.onimeno.onicanvas.feature.workspace.data
 
+import com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig
 import com.onimeno.onicanvas.feature.workspace.state.ControlModule
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
 import com.onimeno.onicanvas.feature.workspace.state.MacroPage
@@ -67,6 +68,10 @@ fun WorkspaceEntity.toDomain(): WorkspaceItem {
         workspaceJson.decodeFromString<List<MacroPage>>(macroPagesJson)
     }.getOrDefault(emptyList())
 
+    val decodedCreativeControls = runCatching {
+        workspaceJson.decodeFromString<CreativeControlsConfig>(creativeControlsJson)
+    }.getOrDefault(CreativeControlsConfig())
+
     val pages = if (decodedPages.isEmpty()) {
         createDefaultPages(id, gridSize)
     } else {
@@ -84,7 +89,8 @@ fun WorkspaceEntity.toDomain(): WorkspaceItem {
         lastUsed = lastUsed,
         enabledModules = decodedModules,
         gridSize = gridSize,
-        macroPages = pages
+        macroPages = pages,
+        creativeControlsConfig = decodedCreativeControls
     )
 }
 
@@ -99,5 +105,6 @@ fun WorkspaceItem.toEntity(): WorkspaceEntity = WorkspaceEntity(
     lastUsed = lastUsed,
     enabledModules = workspaceJson.encodeToString(enabledModules.map { it.name }),
     gridSize = gridSize,
-    macroPagesJson = workspaceJson.encodeToString(macroPages)
+    macroPagesJson = workspaceJson.encodeToString(macroPages),
+    creativeControlsJson = workspaceJson.encodeToString(creativeControlsConfig)
 )

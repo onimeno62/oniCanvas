@@ -104,12 +104,19 @@ fun OniApp() {
                 composable<DashboardRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
                     val vm: DashboardViewModel = viewModel(factory = DashboardViewModelFactory(app.container.dashboardRepository))
-                    DashboardScreen(vm, { navController.navigate(ConnectionRoute) }, { navController.navigate(ControlsRoute) }, { navController.navigate(WorkspaceRoute) }, { navController.navigate(SettingsRoute) }, { navController.navigate(AboutRoute) })
+                    DashboardScreen(
+                        viewModel = vm,
+                        onNavigateToConnection = { navController.navigate(ConnectionRoute) },
+                        onNavigateToControls = { navController.navigate(ControlsRoute) },
+                        onNavigateToWorkspace = { navController.navigate(WorkspaceRoute) },
+                        onNavigateToSettings = { navController.navigate(SettingsRoute) },
+                        onNavigateToAbout = { navController.navigate(AboutRoute) }
+                    )
                 }
                 composable<WorkspaceRoute> { WorkspaceScreen(onWorkspaceClick = { id -> navController.navigate(WorkspaceEditorRoute(id)) }) }
                 composable<WorkspaceEditorRoute> { entry ->
                     val route: WorkspaceEditorRoute = entry.toRoute()
-                    WorkspaceEditorRouteScreen(route.workspaceId) { navController.popBackStack() }
+                    WorkspaceEditorRouteScreen(workspaceId = route.workspaceId, onBackClick = { navController.popBackStack() })
                 }
                 composable<ControlsRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp

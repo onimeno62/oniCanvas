@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.onimeno.onicanvas.feature.workspace.data.WorkspaceRepository
 import com.onimeno.onicanvas.feature.workspace.state.ControlModule
+import com.onimeno.onicanvas.feature.workspace.state.MacroAction
+import com.onimeno.onicanvas.feature.workspace.state.MacroButton
+import com.onimeno.onicanvas.feature.workspace.state.MacroPage
+import com.onimeno.onicanvas.feature.workspace.state.WorkspaceCustomization
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceEditorUiState
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,10 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class WorkspaceEditorViewModel(
-    private val repository: WorkspaceRepository
-) : ViewModel() {
-
+class WorkspaceEditorViewModel(private val repository: WorkspaceRepository) : ViewModel() {
     private val _uiState = MutableStateFlow<WorkspaceEditorUiState>(WorkspaceEditorUiState.Loading)
     val uiState: StateFlow<WorkspaceEditorUiState> = _uiState.asStateFlow()
     private val undoStack = mutableListOf<EditorCommand>()
@@ -52,7 +53,7 @@ class WorkspaceEditorViewModel(
         _uiState.value = state.copy(editingWorkspace = editing, isDirty = editing != state.originalWorkspace, canUndo = true, canRedo = redoStack.isNotEmpty())
     }
 
-    fun toggleModule(module: ControlModule) { executeCommand(ToggleModuleCommand(module)) }
+    fun toggleModule(module: ControlModule) = executeCommand(ToggleModuleCommand(module))
     fun moveModuleUp(index: Int) { if (index > 0) executeCommand(MoveModuleCommand(index, index - 1)) }
     fun moveModuleDown(index: Int) {
         val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
@@ -65,14 +66,89 @@ class WorkspaceEditorViewModel(
         executeCommand(UpdateDetailsCommand(editing.name, name, editing.targetApp, targetApp, editing.description, description))
     }
 
+    fun setWorkspaceIcon(iconName: String) {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        if (iconName.isBlank() || iconName == state.editingWorkspace.iconName) return
+        executeCommand(UpdateWorkspaceCommand { it.copy(iconName = iconName) })
+    }
+
+    fun setWorkspaceTheme(themeKey: String) {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        if (themeKey == state.editingWorkspace.customization.themeKey) return
+        executeCommand(UpdateWorkspaceCommand { it.copy(customization = WorkspaceCustomization(themeKey)) })
+    }
+
+    fun setGridSize(size: Int) {
+        val clamped = size.coerceIn(2, 6)
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        if (clamped == state.editingWorkspace.gridSize) return
+        executeCommand(ResizeGridCommand(clamped))
+    }
+
+    fun addButton(label: String, iconName: String, action: MacroAction) {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        val page = state.editingWorkspace.macroPages.minByOrNull(MacroPage::orderIndex) ?: return
+        val capacity = state.editingWorkspace.gridSize * state.editingWorkspace.gridSize
+        if (page.buttons.size >= capacity) return
+        val nextPosition = (page.buttons.maxOfOrNull { it.position } ?: -1) + 1
+        val button = MacroButton(
+            id = "${page.id}_btn_${System.currentTimeMillis()}", position = nextPosition,
+            label = label.trim().ifBlank { "Action ${nextPosition + 1}" }, iconName = iconName,
+            action = action
+        )
+        executeCommand(UpdateWorkspaceCommand { workspace ->
+            workspace.copy(
+                macroPages = workspace.macroPages.map { current ->
+                    if (current.id != page.id) current else current.copy(buttons = current.buttons + button)
+                },
+                buttonCount = workspace.macroPages.sumOf { it.buttons.size } + 1
+            )
+        })
+    }
+
+    fun removeButton(pageId: String, buttonId: String) {
+        executeCommand(UpdateWorkspaceCommand { workspace ->
+            val pages = workspace.macroPages.map { page ->
+                if (page.id != pageId) page else page.copy(
+                    buttons = page.buttons.filterNot { it.id == buttonId }.mapIndexed { index, button -> button.copy(position = index) }
+                )
+            }
+            workspace.copy(macroPages = pages, buttonCount = pages.sumOf { it.buttons.size })
+        })
+    }
+
+    fun moveButton(pageId: String, fromPosition: Int, toPosition: Int) {
+        if (fromPosition == toPosition) return
+        executeCommand(UpdateWorkspaceCommand { workspace ->
+            workspace.copy(macroPages = workspace.macroPages.map { page ->
+                if (page.id != pageId) page else {
+                    val buttons = page.buttons.sortedBy { it.position }.toMutableList()
+                    if (fromPosition !in buttons.indices || toPosition !in buttons.indices) page
+                    else {
+                        val moved = buttons.removeAt(fromPosition)
+                        buttons.add(toPosition, moved)
+                        page.copy(buttons = buttons.mapIndexed { index, button -> button.copy(position = index) })
+                    }
+                }
+            })
+        })
+    }
+
+    fun updateButton(pageId: String, buttonId: String, label: String, iconName: String, action: MacroAction) {
+        executeCommand(UpdateWorkspaceCommand { workspace ->
+            workspace.copy(macroPages = workspace.macroPages.map { page ->
+                if (page.id != pageId) page else page.copy(buttons = page.buttons.map { button ->
+                    if (button.id != buttonId) button else button.copy(label = label.trim().ifBlank { button.label }, iconName = iconName, action = action)
+                })
+            })
+        })
+    }
+
     fun toggleFavorite() = viewModelScope.launch {
         val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return@launch
         val updated = state.editingWorkspace.copy(isFavorite = !state.editingWorkspace.isFavorite)
         repository.saveWorkspace(updated)
-        _uiState.value = state.copy(
-            originalWorkspace = if (!state.isDirty) updated else state.originalWorkspace,
-            editingWorkspace = updated
-        )
+        _uiState.value = state.copy(originalWorkspace = if (!state.isDirty) updated else state.originalWorkspace, editingWorkspace = updated)
     }
 
     fun save() = viewModelScope.launch {
@@ -85,8 +161,7 @@ class WorkspaceEditorViewModel(
     fun saveAs(newName: String) = viewModelScope.launch {
         val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return@launch
         val newWorkspace = state.editingWorkspace.copy(id = "custom_${System.currentTimeMillis()}", name = newName, isFavorite = false, lastUsed = "Just created")
-        repository.saveWorkspace(newWorkspace)
-        undoStack.clear(); redoStack.clear()
+        repository.saveWorkspace(newWorkspace); undoStack.clear(); redoStack.clear()
         _uiState.value = WorkspaceEditorUiState.Success(newWorkspace, newWorkspace, false, false, false)
     }
 
@@ -99,15 +174,13 @@ class WorkspaceEditorViewModel(
     fun duplicate() = viewModelScope.launch {
         val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return@launch
         repository.duplicateWorkspace(state.originalWorkspace.id, "${state.originalWorkspace.name} (Copy)")?.let {
-            undoStack.clear(); redoStack.clear()
-            _uiState.value = WorkspaceEditorUiState.Success(it, it, false, false, false)
+            undoStack.clear(); redoStack.clear(); _uiState.value = WorkspaceEditorUiState.Success(it, it, false, false, false)
         }
     }
 
     fun delete(onDeleted: () -> Unit) = viewModelScope.launch {
         val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return@launch
-        repository.deleteWorkspace(state.originalWorkspace.id)
-        onDeleted()
+        repository.deleteWorkspace(state.originalWorkspace.id); onDeleted()
     }
 
     fun showRenameDialog(show: Boolean) { updateDialogState { it.copy(showRenameDialog = show) } }
@@ -128,4 +201,19 @@ private class MoveModuleCommand(private val from: Int, private val to: Int) : Ed
 private class UpdateDetailsCommand(private val oldName: String, private val newName: String, private val oldApp: String, private val newApp: String, private val oldDesc: String, private val newDesc: String) : EditorCommand {
     override fun execute(workspace: WorkspaceItem) = workspace.copy(name = newName, targetApp = newApp, description = newDesc)
     override fun undo(workspace: WorkspaceItem) = workspace.copy(name = oldName, targetApp = oldApp, description = oldDesc)
+}
+private class UpdateWorkspaceCommand(private val transform: (WorkspaceItem) -> WorkspaceItem) : EditorCommand {
+    private var before: WorkspaceItem? = null
+    override fun execute(workspace: WorkspaceItem): WorkspaceItem { before = workspace; return transform(workspace) }
+    override fun undo(workspace: WorkspaceItem): WorkspaceItem = before ?: workspace
+}
+private class ResizeGridCommand(private val newSize: Int) : EditorCommand {
+    private var before: WorkspaceItem? = null
+    override fun execute(workspace: WorkspaceItem): WorkspaceItem {
+        before = workspace
+        val capacity = newSize * newSize
+        val pages = workspace.macroPages.map { page -> page.copy(buttons = page.buttons.sortedBy { it.position }.take(capacity).mapIndexed { index, button -> button.copy(position = index) }) }
+        return workspace.copy(gridSize = newSize, macroPages = pages, buttonCount = pages.sumOf { it.buttons.size })
+    }
+    override fun undo(workspace: WorkspaceItem): WorkspaceItem = before ?: workspace
 }

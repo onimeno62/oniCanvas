@@ -22,7 +22,8 @@ data class WorkspaceItem(
     val enabledModules: List<ControlModule> = ControlModule.values().toList(),
     val gridSize: Int = 3,
     val macroPages: List<MacroPage> = emptyList(),
-    val creativeControlsConfig: CreativeControlsConfig = CreativeControlsConfig()
+    val creativeControlsConfig: CreativeControlsConfig = CreativeControlsConfig(),
+    val customization: WorkspaceCustomization = WorkspaceCustomization()
 )
 
 sealed interface WorkspaceUiState {

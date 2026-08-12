@@ -11,8 +11,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
-private val workspaceJson = Json { ignoreUnknownKeys = true }
+private val workspaceJson = Json {
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+}
 
 @Serializable
 private data class WorkspacePersistencePayload(
@@ -50,7 +54,7 @@ fun WorkspaceEntity.toDomain(): WorkspaceItem {
 
     val decodedPages = runCatching { workspaceJson.decodeFromString<List<MacroPage>>(macroPagesJson) }.getOrDefault(emptyList())
     val persistenceJson = runCatching { workspaceJson.parseToJsonElement(creativeControlsJson).jsonObject }.getOrNull()
-    val isPhase7Payload = persistenceJson?.containsKey("customization") == true
+    val isPhase7Payload = persistenceJson?.containsKey("creativeControls") == true || persistenceJson?.containsKey("customization") == true
     val persistence = if (isPhase7Payload) {
         runCatching { workspaceJson.decodeFromString<WorkspacePersistencePayload>(creativeControlsJson) }.getOrNull()
     } else null

@@ -62,4 +62,53 @@ class WorkspaceEntityMapperTest {
         assertEquals(2.2f, mappedDomain.creativeControlsConfig.zoomSensitivity, 0.001f)
         assertEquals(true, mappedDomain.creativeControlsConfig.invertPanX)
     }
+
+    @Test
+    fun legacyEntityWithRawCreativeControlsConfigJsonMapsConfigCorrectly() {
+        val legacyEntity = WorkspaceEntity(
+            id = "legacy_raw_1",
+            name = "Legacy Raw",
+            description = "Legacy JSON without Phase 7 payload",
+            targetApp = "Krita",
+            buttonCount = 9,
+            iconName = "layers",
+            isFavorite = false,
+            lastUsed = "2026-08-11",
+            enabledModules = "[\"MACRO_PAD\"]",
+            gridSize = 3,
+            macroPagesJson = "[]",
+            creativeControlsJson = "{\"panSensitivity\":2.5,\"zoomSensitivity\":1.5,\"invertPanY\":true}"
+        )
+
+        val domain = legacyEntity.toDomain()
+
+        assertEquals("legacy_raw_1", domain.id)
+        assertEquals(2.5f, domain.creativeControlsConfig.panSensitivity, 0.001f)
+        assertEquals(1.5f, domain.creativeControlsConfig.zoomSensitivity, 0.001f)
+        assertEquals(true, domain.creativeControlsConfig.invertPanY)
+        assertEquals("default", domain.customization.themeKey)
+    }
+
+    @Test
+    fun roundTripThemeAndIconCustomization() {
+        val originalDomain = WorkspaceItem(
+            id = "ws_custom_1",
+            name = "Customized Workspace",
+            description = "Theme and Icon test",
+            targetApp = "Blender",
+            buttonCount = 16,
+            iconName = "palette",
+            lastUsed = "2026-08-11",
+            customization = com.onimeno.onicanvas.feature.workspace.state.WorkspaceCustomization(
+                themeKey = "midnight"
+            )
+        )
+
+        val entity = originalDomain.toEntity()
+        val mapped = entity.toDomain()
+
+        assertEquals("ws_custom_1", mapped.id)
+        assertEquals("palette", mapped.iconName)
+        assertEquals("midnight", mapped.customization.themeKey)
+    }
 }

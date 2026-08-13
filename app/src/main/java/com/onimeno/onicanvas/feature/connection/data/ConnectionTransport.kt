@@ -4,7 +4,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -18,7 +17,8 @@ import java.net.Socket
 
 /** TCP transport for newline-delimited oniCanvas JSON frames. */
 class ConnectionTransport {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    private val writeLock = Any()
     private var socket: Socket? = null
     private var writer: BufferedWriter? = null
     private var readerJob: Job? = null
@@ -58,27 +58,11 @@ class ConnectionTransport {
     }
 
     suspend fun send(message: OniCanvasMessage): Boolean {
-        val currentWriter = writer ?: return false
-        val currentSocket = socket ?: return false
-        if (currentSocket.isClosed || !currentSocket.isConnected) return false
-
-        return runCatching {
-            currentWriter.write(OniCanvasProtocol.encode(message))
-            currentWriter.newLine()
-            currentWriter.flush()
-        }.isSuccess
+        return sendEncoded(OniCanvasProtocol.encode(message))
     }
 
     suspend fun sendFrame(frame: String): Boolean {
-        val currentWriter = writer ?: return false
-        val currentSocket = socket ?: return false
-        if (currentSocket.isClosed || !currentSocket.isConnected) return false
-
-        return runCatching {
-            currentWriter.write(frame)
-            currentWriter.newLine()
-            currentWriter.flush()
-        }.isSuccess
+        return sendEncoded(frame)
     }
 
     fun isConnected(): Boolean = socket?.let { it.isConnected && !it.isClosed } == true
@@ -90,13 +74,37 @@ class ConnectionTransport {
         scope.cancel()
     }
 
+    private suspend fun sendEncoded(frame: String): Boolean {
+        val currentWriter: BufferedWriter
+        val currentSocket: Socket
+        synchronized(writeLock) {
+            currentWriter = writer ?: return false
+            currentSocket = socket ?: return false
+            if (currentSocket.isClosed || !currentSocket.isConnected) return false
+        }
+
+        return synchronized(writeLock) {
+            if (writer !== currentWriter || socket !== currentSocket || currentSocket.isClosed) {
+                false
+            } else {
+                runCatching {
+                    currentWriter.write(frame)
+                    currentWriter.newLine()
+                    currentWriter.flush()
+                }.isSuccess
+            }
+        }
+    }
+
     private fun closeSocketOnly(emitDisconnected: Boolean) {
-        readerJob?.cancel()
-        readerJob = null
-        runCatching { writer?.close() }
-        writer = null
-        runCatching { socket?.close() }
-        socket = null
+        synchronized(writeLock) {
+            readerJob?.cancel()
+            readerJob = null
+            runCatching { writer?.close() }
+            writer = null
+            runCatching { socket?.close() }
+            socket = null
+        }
         if (emitDisconnected) _disconnected.tryEmit(Unit)
     }
 }

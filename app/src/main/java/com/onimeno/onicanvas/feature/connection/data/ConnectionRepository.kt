@@ -23,7 +23,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
-
 data class ConnectionSnapshot(
     val status: OniStatus,
     val phase: ConnectionPhase,
@@ -103,6 +102,7 @@ class ConnectionRepository(
         heartbeatJob = null
         missedHeartbeats = 0
         transport.close()
+        lastHost = null
         addLog("Disconnected by user", "INFO")
         publish(
             status = OniStatus.OFFLINE,
@@ -119,6 +119,7 @@ class ConnectionRepository(
     suspend fun connectToHost(hostId: String) {
         reconnectJob?.cancel()
         reconnectJob = null
+        reconnectGeneration++
         val host = findHost(hostId)
         if (host == null) {
             addLog("Host ID not found: $hostId", "ERROR")
@@ -163,6 +164,7 @@ class ConnectionRepository(
     }
 
     fun close() {
+        reconnectGeneration++
         reconnectJob?.cancel()
         heartbeatJob?.cancel()
         transport.shutdown()
@@ -185,7 +187,7 @@ class ConnectionRepository(
                 reconnectAttempt = reconnectAttempt
             )
             addLog(
-                if (reconnectAttempt > 0) "Reconnect attempt $reconnectAttempt/5 to ${host.name}" else "Connecting to ${host.name} (${host.ipAddress}:${host.port})",
+                if (reconnectAttempt > 0) "Reconnect attempt $reconnectAttempt/${ConnectionReconnectPolicy.MAX_ATTEMPTS} to ${host.name}" else "Connecting to ${host.name} (${host.ipAddress}:${host.port})",
                 "INFO"
             )
 
@@ -278,10 +280,9 @@ class ConnectionRepository(
         reconnectJob?.cancel()
         val generation = ++reconnectGeneration
         reconnectJob = repositoryScope.launch {
-            val delays = longArrayOf(0, 2_000, 5_000, 10_000, 10_000)
-            for (attempt in 1..5) {
+            for (attempt in 1..ConnectionReconnectPolicy.MAX_ATTEMPTS) {
                 if (generation != reconnectGeneration) return@launch
-                delay(delays[attempt - 1])
+                delay(ConnectionReconnectPolicy.delayBeforeAttempt(attempt))
                 connect(host, attempt)
                 if (isConnected()) {
                     addLog("Reconnected to ${host.name}", "SUCCESS")
@@ -289,8 +290,8 @@ class ConnectionRepository(
                 }
             }
             if (generation == reconnectGeneration) {
-                addLog("Automatic reconnect exhausted after 5 attempts", "ERROR")
-                publish(status = OniStatus.ERROR, phase = ConnectionPhase.ERROR, reconnectAttempt = 5, latencyMs = null)
+                addLog("Automatic reconnect exhausted after ${ConnectionReconnectPolicy.MAX_ATTEMPTS} attempts", "ERROR")
+                publish(status = OniStatus.ERROR, phase = ConnectionPhase.ERROR, reconnectAttempt = ConnectionReconnectPolicy.MAX_ATTEMPTS, latencyMs = null)
             }
         }
     }

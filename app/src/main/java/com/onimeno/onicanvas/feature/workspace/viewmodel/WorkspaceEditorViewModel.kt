@@ -75,7 +75,19 @@ class WorkspaceEditorViewModel(private val repository: WorkspaceRepository) : Vi
     fun setWorkspaceTheme(themeKey: String) {
         val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
         if (themeKey == state.editingWorkspace.customization.themeKey) return
-        executeCommand(UpdateWorkspaceCommand { it.copy(customization = WorkspaceCustomization(themeKey)) })
+        executeCommand(UpdateWorkspaceCommand { it.copy(customization = it.customization.copy(themeKey = themeKey)) })
+    }
+
+    fun setWorkspaceAccentColor(colorHex: String?) {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        if (colorHex == state.editingWorkspace.customization.accentColorHex) return
+        executeCommand(UpdateWorkspaceCommand { it.copy(customization = it.customization.copy(accentColorHex = colorHex)) })
+    }
+
+    fun setCustomization(customization: WorkspaceCustomization) {
+        val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
+        if (customization == state.editingWorkspace.customization) return
+        executeCommand(UpdateWorkspaceCommand { it.copy(customization = customization) })
     }
 
     fun setGridSize(size: Int) {
@@ -85,7 +97,7 @@ class WorkspaceEditorViewModel(private val repository: WorkspaceRepository) : Vi
         executeCommand(ResizeGridCommand(clamped))
     }
 
-    fun addButton(label: String, iconName: String, action: MacroAction) {
+    fun addButton(label: String, iconName: String, action: MacroAction, colorHex: String? = null) {
         val state = _uiState.value as? WorkspaceEditorUiState.Success ?: return
         val page = state.editingWorkspace.macroPages.minByOrNull(MacroPage::orderIndex) ?: return
         val capacity = state.editingWorkspace.gridSize * state.editingWorkspace.gridSize
@@ -94,7 +106,7 @@ class WorkspaceEditorViewModel(private val repository: WorkspaceRepository) : Vi
         val button = MacroButton(
             id = "${page.id}_btn_${System.currentTimeMillis()}", position = nextPosition,
             label = label.trim().ifBlank { "Action ${nextPosition + 1}" }, iconName = iconName,
-            action = action
+            action = action, colorHex = colorHex
         )
         executeCommand(UpdateWorkspaceCommand { workspace ->
             workspace.copy(
@@ -134,13 +146,77 @@ class WorkspaceEditorViewModel(private val repository: WorkspaceRepository) : Vi
         })
     }
 
-    fun updateButton(pageId: String, buttonId: String, label: String, iconName: String, action: MacroAction) {
+    fun updateButton(pageId: String, buttonId: String, label: String, iconName: String, action: MacroAction, colorHex: String? = null) {
         executeCommand(UpdateWorkspaceCommand { workspace ->
             workspace.copy(macroPages = workspace.macroPages.map { page ->
                 if (page.id != pageId) page else page.copy(buttons = page.buttons.map { button ->
-                    if (button.id != buttonId) button else button.copy(label = label.trim().ifBlank { button.label }, iconName = iconName, action = action)
+                    if (button.id != buttonId) button else button.copy(
+                        label = label.trim().ifBlank { button.label },
+                        iconName = iconName,
+                        action = action,
+                        colorHex = colorHex ?: button.colorHex
+                    )
                 })
             })
+        })
+    }
+
+    fun updateButton(pageId: String, updatedButton: MacroButton) {
+        executeCommand(UpdateWorkspaceCommand { workspace ->
+            workspace.copy(macroPages = workspace.macroPages.map { page ->
+                if (page.id != pageId) page else page.copy(buttons = page.buttons.map { button ->
+                    if (button.id != updatedButton.id) button else updatedButton
+                })
+            })
+        })
+    }
+
+    fun setButtonColor(pageId: String, buttonId: String, colorHex: String?) {
+        executeCommand(UpdateWorkspaceCommand { workspace ->
+            workspace.copy(macroPages = workspace.macroPages.map { page ->
+                if (page.id != pageId) page else page.copy(buttons = page.buttons.map { button ->
+                    if (button.id != buttonId) button else button.copy(colorHex = colorHex)
+                })
+            })
+        })
+    }
+
+    fun updateCreativeControlsConfig(config: com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig) {
+        executeCommand(UpdateWorkspaceCommand { it.copy(creativeControlsConfig = config) })
+    }
+
+    fun updateGestureBinding(binding: com.onimeno.onicanvas.feature.controls.state.GestureBinding) {
+        executeCommand(UpdateWorkspaceCommand { workspace ->
+            val current = workspace.creativeControlsConfig
+            val updatedBindings = current.gestureBindings.map { if (it.gestureType == binding.gestureType) binding else it }
+            workspace.copy(creativeControlsConfig = current.copy(gestureBindings = updatedBindings))
+        })
+    }
+
+    fun updateGestureSensitivities(
+        zoom: Float? = null,
+        pan: Float? = null,
+        rotation: Float? = null,
+        invertZoom: Boolean? = null,
+        invertPanX: Boolean? = null,
+        invertPanY: Boolean? = null,
+        invertRotation: Boolean? = null,
+        hapticsEnabled: Boolean? = null
+    ) {
+        executeCommand(UpdateWorkspaceCommand { workspace ->
+            val current = workspace.creativeControlsConfig
+            workspace.copy(
+                creativeControlsConfig = current.copy(
+                    zoomSensitivity = zoom ?: current.zoomSensitivity,
+                    panSensitivity = pan ?: current.panSensitivity,
+                    rotationSensitivity = rotation ?: current.rotationSensitivity,
+                    invertZoom = invertZoom ?: current.invertZoom,
+                    invertPanX = invertPanX ?: current.invertPanX,
+                    invertPanY = invertPanY ?: current.invertPanY,
+                    invertRotation = invertRotation ?: current.invertRotation,
+                    hapticsEnabled = hapticsEnabled ?: current.hapticsEnabled
+                )
+            )
         })
     }
 

@@ -95,8 +95,12 @@ import com.onimeno.onicanvas.core.designsystem.components.OniTopBar
 import com.onimeno.onicanvas.core.designsystem.theme.GlassCardShape
 import com.onimeno.onicanvas.core.designsystem.theme.LocalSpacing
 import com.onimeno.onicanvas.feature.workspace.state.ControlModule
+import com.onimeno.onicanvas.feature.workspace.state.WorkspaceColorPalette
+import com.onimeno.onicanvas.feature.workspace.state.WorkspaceCustomization
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceEditorUiState
+import com.onimeno.onicanvas.feature.workspace.state.WorkspaceIconLibrary
 import com.onimeno.onicanvas.feature.workspace.state.WorkspaceItem
+import com.onimeno.onicanvas.feature.workspace.state.WorkspaceTheme
 import com.onimeno.onicanvas.feature.workspace.viewmodel.WorkspaceEditorViewModel
 
 @Composable
@@ -303,6 +307,8 @@ fun EditorLayout(
 
         if (isWideScreen) {
             // Adaptive design: Side-by-side splitscreen on wide monitors/tablets
+            var leftPaneTab by remember { mutableStateOf(0) } // 0 = Modules & Details, 1 = Customization
+
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -326,15 +332,53 @@ fun EditorLayout(
                         onDeleteClick = { viewModel.showDeleteConfirmDialog(true) }
                     )
 
-                    OniSectionHeader(title = "Control Modules Config")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Button(
+                            onClick = { leftPaneTab = 0 },
+                            modifier = Modifier.weight(1f).testTag("wide_tab_modules"),
+                            colors = if (leftPaneTab == 0) ButtonDefaults.buttonColors() else ButtonDefaults.filledTonalButtonColors(containerColor = Color.Transparent)
+                        ) {
+                            Text("Control Modules")
+                        }
+                        Button(
+                            onClick = { leftPaneTab = 1 },
+                            modifier = Modifier.weight(1f).testTag("wide_tab_customize"),
+                            colors = if (leftPaneTab == 1) ButtonDefaults.buttonColors() else ButtonDefaults.filledTonalButtonColors(containerColor = Color.Transparent)
+                        ) {
+                            Text("Customize (Grid / Theme / Gestures)")
+                        }
+                    }
 
-                    ModulesConfigurationList(
-                        enabledModules = state.editingWorkspace.enabledModules,
-                        onToggleModule = { viewModel.toggleModule(it) },
-                        onMoveUp = { viewModel.moveModuleUp(it) },
-                        onMoveDown = { viewModel.moveModuleDown(it) },
-                        modifier = Modifier.weight(1f)
-                    )
+                    if (leftPaneTab == 0) {
+                        OniSectionHeader(title = "Control Modules Config")
+                        ModulesConfigurationList(
+                            enabledModules = state.editingWorkspace.enabledModules,
+                            onToggleModule = { viewModel.toggleModule(it) },
+                            onMoveUp = { viewModel.moveModuleUp(it) },
+                            onMoveDown = { viewModel.moveModuleDown(it) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        WorkspaceCustomizationPanel(
+                            workspace = state.editingWorkspace,
+                            onGridSizeChanged = { viewModel.setGridSize(it) },
+                            onThemeSelected = { viewModel.setWorkspaceTheme(it) },
+                            onIconSelected = { viewModel.setWorkspaceIcon(it) },
+                            onAccentColorSelected = { viewModel.setWorkspaceAccentColor(it) },
+                            onAddButton = { label, icon, action -> viewModel.addButton(label, icon, action) },
+                            onRemoveButton = { pageId, btnId -> viewModel.removeButton(pageId, btnId) },
+                            onMoveButton = { pageId, from, to -> viewModel.moveButton(pageId, from, to) },
+                            onEditButton = { pageId, btn -> viewModel.updateButton(pageId, btn) },
+                            onCreativeControlsConfigChanged = { viewModel.updateCreativeControlsConfig(it) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
 
                 // Right Panel: Live Visual Preview
@@ -346,6 +390,7 @@ fun EditorLayout(
                 ) {
                     OniSectionHeader(title = "Live Companion Preview")
                     LivePreviewPanel(
+                        workspace = state.editingWorkspace,
                         enabledModules = state.editingWorkspace.enabledModules,
                         modifier = Modifier.weight(1f)
                     )
@@ -353,7 +398,7 @@ fun EditorLayout(
             }
         } else {
             // Stacked design on compact/mobile phones
-            var activeTab by remember { mutableStateOf(0) } // 0 = Config, 1 = Preview
+            var activeTab by remember { mutableStateOf(0) } // 0 = Config, 1 = Customize, 2 = Preview
 
             Column(modifier = Modifier.fillMaxSize()) {
                 // Inline Tabs
@@ -365,25 +410,36 @@ fun EditorLayout(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     Text(
-                        text = "CONFIGURATION",
+                        text = "CONFIG",
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         color = if (activeTab == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
                             .clickable { activeTab = 0 }
-                            .padding(vertical = 8.dp, horizontal = 16.dp)
+                            .padding(vertical = 8.dp, horizontal = 12.dp)
                             .testTag("tab_config")
                     )
                     Text(
-                        text = "LIVE PREVIEW (${state.editingWorkspace.enabledModules.size})",
+                        text = "CUSTOMIZE",
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         color = if (activeTab == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
                             .clickable { activeTab = 1 }
-                            .padding(vertical = 8.dp, horizontal = 16.dp)
+                            .padding(vertical = 8.dp, horizontal = 12.dp)
+                            .testTag("tab_customize")
+                    )
+                    Text(
+                        text = "PREVIEW (${state.editingWorkspace.enabledModules.size})",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (activeTab == 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { activeTab = 2 }
+                            .padding(vertical = 8.dp, horizontal = 12.dp)
                             .testTag("tab_preview")
                     )
                 }
@@ -394,71 +450,89 @@ fun EditorLayout(
                         .weight(1f)
                         .padding(spacing.medium)
                 ) {
-                    if (activeTab == 0) {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(spacing.medium),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            item {
-                                WorkspaceDetailsCard(
-                                    workspace = state.editingWorkspace,
-                                    isDirty = state.isDirty,
-                                    onEditClick = { viewModel.showRenameDialog(true) },
-                                    onSaveAsClick = { viewModel.showSaveAsDialog(true) },
-                                    onRevertClick = { viewModel.revert() },
-                                    onDuplicateClick = { viewModel.duplicate() },
-                                    onDeleteClick = { viewModel.showDeleteConfirmDialog(true) }
-                                )
-                            }
-                            item {
-                                OniSectionHeader(title = "Control Modules Config")
-                            }
-                            item {
-                                // Nested column inside single-view scrolling layout for mobile compliance
-                                Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
-                                    val inactiveModules = ControlModule.values().filter { !state.editingWorkspace.enabledModules.contains(it) }
+                    when (activeTab) {
+                        0 -> {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(spacing.medium),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                item {
+                                    WorkspaceDetailsCard(
+                                        workspace = state.editingWorkspace,
+                                        isDirty = state.isDirty,
+                                        onEditClick = { viewModel.showRenameDialog(true) },
+                                        onSaveAsClick = { viewModel.showSaveAsDialog(true) },
+                                        onRevertClick = { viewModel.revert() },
+                                        onDuplicateClick = { viewModel.duplicate() },
+                                        onDeleteClick = { viewModel.showDeleteConfirmDialog(true) }
+                                    )
+                                }
+                                item {
+                                    OniSectionHeader(title = "Control Modules Config")
+                                }
+                                item {
+                                    Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+                                        val inactiveModules = ControlModule.values().filter { !state.editingWorkspace.enabledModules.contains(it) }
 
-                                    // Active list
-                                    state.editingWorkspace.enabledModules.forEachIndexed { index, module ->
-                                        ModuleConfigRowItem(
-                                            module = module,
-                                            isEnabled = true,
-                                            isFirst = index == 0,
-                                            isLast = index == state.editingWorkspace.enabledModules.lastIndex,
-                                            onToggle = { viewModel.toggleModule(module) },
-                                            onMoveUp = { viewModel.moveModuleUp(index) },
-                                            onMoveDown = { viewModel.moveModuleDown(index) }
-                                        )
-                                    }
-
-                                    if (inactiveModules.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(spacing.small))
-                                        Text(
-                                            text = "INACTIVE MODULES (TAP TO ENABLE)",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        inactiveModules.forEach { module ->
+                                        // Active list
+                                        state.editingWorkspace.enabledModules.forEachIndexed { index, module ->
                                             ModuleConfigRowItem(
                                                 module = module,
-                                                isEnabled = false,
-                                                isFirst = false,
-                                                isLast = false,
+                                                isEnabled = true,
+                                                isFirst = index == 0,
+                                                isLast = index == state.editingWorkspace.enabledModules.lastIndex,
                                                 onToggle = { viewModel.toggleModule(module) },
-                                                onMoveUp = {},
-                                                onMoveDown = {}
+                                                onMoveUp = { viewModel.moveModuleUp(index) },
+                                                onMoveDown = { viewModel.moveModuleDown(index) }
                                             )
+                                        }
+
+                                        if (inactiveModules.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(spacing.small))
+                                            Text(
+                                                text = "INACTIVE MODULES (TAP TO ENABLE)",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            inactiveModules.forEach { module ->
+                                                ModuleConfigRowItem(
+                                                    module = module,
+                                                    isEnabled = false,
+                                                    isFirst = false,
+                                                    isLast = false,
+                                                    onToggle = { viewModel.toggleModule(module) },
+                                                    onMoveUp = {},
+                                                    onMoveDown = {}
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    } else {
-                        LivePreviewPanel(
-                            enabledModules = state.editingWorkspace.enabledModules,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        1 -> {
+                            WorkspaceCustomizationPanel(
+                                workspace = state.editingWorkspace,
+                                onGridSizeChanged = { viewModel.setGridSize(it) },
+                                onThemeSelected = { viewModel.setWorkspaceTheme(it) },
+                                onIconSelected = { viewModel.setWorkspaceIcon(it) },
+                                onAccentColorSelected = { viewModel.setWorkspaceAccentColor(it) },
+                                onAddButton = { label, icon, action -> viewModel.addButton(label, icon, action) },
+                                onRemoveButton = { pageId, btnId -> viewModel.removeButton(pageId, btnId) },
+                                onMoveButton = { pageId, from, to -> viewModel.moveButton(pageId, from, to) },
+                                onEditButton = { pageId, btn -> viewModel.updateButton(pageId, btn) },
+                                onCreativeControlsConfigChanged = { viewModel.updateCreativeControlsConfig(it) },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        else -> {
+                            LivePreviewPanel(
+                                workspace = state.editingWorkspace,
+                                enabledModules = state.editingWorkspace.enabledModules,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
             }
@@ -806,10 +880,16 @@ fun ModuleConfigRowItem(
 
 @Composable
 fun LivePreviewPanel(
-    enabledModules: List<ControlModule>,
+    workspace: WorkspaceItem? = null,
+    enabledModules: List<ControlModule> = workspace?.enabledModules ?: emptyList(),
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
+    val theme = workspace?.customization?.themeKey?.let { WorkspaceTheme.fromKey(it) } ?: WorkspaceTheme.DEFAULT
+    val themeAccent = WorkspaceColorPalette.parseColor(
+        workspace?.customization?.accentColorHex,
+        runCatching { Color(android.graphics.Color.parseColor(theme.accentHex)) }.getOrDefault(MaterialTheme.colorScheme.primary)
+    )
 
     Box(
         modifier = modifier
@@ -825,7 +905,7 @@ fun LivePreviewPanel(
             )
             .border(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
+                color = themeAccent.copy(alpha = 0.3f),
                 shape = RoundedCornerShape(16.dp)
             )
             .padding(spacing.medium)
@@ -866,10 +946,10 @@ fun LivePreviewPanel(
             ) {
                 item {
                     Text(
-                        text = "TABLET LANDSCAPE VIEWPORT",
+                        text = "THEME: ${theme.displayName.uppercase()} • ${workspace?.gridSize ?: 3}×${workspace?.gridSize ?: 3} GRID",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary,
+                        color = themeAccent,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -877,7 +957,7 @@ fun LivePreviewPanel(
                 }
 
                 itemsIndexed(enabledModules) { _, module ->
-                    PreviewModuleWidget(module = module)
+                    PreviewModuleWidget(module = module, workspace = workspace)
                 }
             }
         }
@@ -887,9 +967,15 @@ fun LivePreviewPanel(
 @Composable
 fun PreviewModuleWidget(
     module: ControlModule,
+    workspace: WorkspaceItem? = null,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
+    val theme = workspace?.customization?.themeKey?.let { WorkspaceTheme.fromKey(it) } ?: WorkspaceTheme.DEFAULT
+    val themeAccent = WorkspaceColorPalette.parseColor(
+        workspace?.customization?.accentColorHex,
+        runCatching { Color(android.graphics.Color.parseColor(theme.accentHex)) }.getOrDefault(MaterialTheme.colorScheme.primary)
+    )
 
     Card(
         modifier = modifier
@@ -899,7 +985,7 @@ fun PreviewModuleWidget(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.2f))
     ) {
         Column(modifier = Modifier.padding(spacing.medium)) {
             // Widget Title Header
@@ -917,14 +1003,14 @@ fun PreviewModuleWidget(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = themeAccent,
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
                     text = module.displayName.uppercase(),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = themeAccent,
                     letterSpacing = 1.sp
                 )
             }
@@ -934,40 +1020,88 @@ fun PreviewModuleWidget(
             // Widget Content Render based on modules
             when (module) {
                 ControlModule.MACRO_PAD -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf("Undo", "Redo", "Brush+", "Brush-").forEach { label ->
-                            var isClicked by remember { mutableStateOf(false) }
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(36.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(
-                                        if (isClicked) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                    val buttons = workspace?.macroPages?.firstOrNull()?.buttons
+                    if (buttons != null && buttons.isNotEmpty()) {
+                        val gridSize = workspace.gridSize
+                        val chunked = buttons.sortedBy { it.position }.chunked(gridSize)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            chunked.forEach { rowButtons ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    rowButtons.forEach { btn ->
+                                        val btnColor = WorkspaceColorPalette.parseColor(btn.colorHex, themeAccent)
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(44.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(btnColor.copy(alpha = 0.15f))
+                                                .border(0.5.dp, btnColor.copy(alpha = 0.4f), RoundedCornerShape(6.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = WorkspaceIconLibrary.getIcon(btn.iconName),
+                                                    contentDescription = null,
+                                                    tint = btnColor,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Text(
+                                                    text = btn.label,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("Undo", "Redo", "Brush+", "Brush-").forEach { label ->
+                                var isClicked by remember { mutableStateOf(false) }
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            if (isClicked) themeAccent.copy(alpha = 0.3f)
+                                            else themeAccent.copy(alpha = 0.08f)
+                                        )
+                                        .clickable { isClicked = !isClicked }
+                                        .border(0.5.dp, themeAccent.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = themeAccent,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                    .clickable { isClicked = !isClicked }
-                                    .border(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                }
                             }
                         }
                     }
                 }
                 ControlModule.GESTURE_PAD -> {
+                    val config = workspace?.creativeControlsConfig
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
+                            .height(64.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
                             .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
@@ -980,14 +1114,22 @@ fun PreviewModuleWidget(
                             Icon(
                                 imageVector = Icons.Rounded.Gesture,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
+                                tint = themeAccent,
+                                modifier = Modifier.size(18.dp)
                             )
-                            Text(
-                                text = "Touch gesture pad. Swipe to rotate, Pinch to zoom.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Column {
+                                Text(
+                                    text = "Touch Gesture Pad (Pan / Zoom / Rotate)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Zoom: ${String.format("%.1fx", config?.zoomSensitivity ?: 1.0f)} • Pan: ${String.format("%.1fx", config?.panSensitivity ?: 1.0f)} • Haptics: ${if (config?.hapticsEnabled != false) "ON" else "OFF"}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -1001,21 +1143,21 @@ fun PreviewModuleWidget(
                             modifier = Modifier
                                 .size(64.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
-                                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape),
+                                .background(themeAccent.copy(alpha = 0.08f))
+                                .border(1.dp, themeAccent.copy(alpha = 0.25f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
+                                    .background(themeAccent),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Category,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    tint = MaterialTheme.colorScheme.surface,
                                     modifier = Modifier.size(14.dp)
                                 )
                             }

@@ -51,7 +51,8 @@ data class MacroButton(
     val longPressAction: MacroAction? = null,
     val repeatEnabled: Boolean = false,
     val enabled: Boolean = true,
-    val hidden: Boolean = false
+    val hidden: Boolean = false,
+    val colorHex: String? = null
 )
 
 @Serializable

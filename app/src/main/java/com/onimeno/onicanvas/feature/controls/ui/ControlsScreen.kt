@@ -81,6 +81,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -737,6 +738,10 @@ fun MacroGridButton(
     val visualAlpha = if (isAvailable) 1f else 0.4f
     val isClickable = isEditMode || (isConnected && isAvailable)
 
+    val customColor = button.colorHex?.let {
+        runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull()
+    }
+
     val cardBorder = if (button.hidden) {
         BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
     } else {
@@ -746,7 +751,14 @@ fun MacroGridButton(
     val cardColor = when {
         button.hidden -> MaterialTheme.colorScheme.surface.copy(alpha = 0.2f)
         !button.enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        customColor != null -> customColor.copy(alpha = 0.25f)
         else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
+    }
+
+    val iconTint = when {
+        !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant
+        customColor != null -> customColor
+        else -> MaterialTheme.colorScheme.primary
     }
 
     Card(
@@ -791,7 +803,7 @@ fun MacroGridButton(
                 Icon(
                     imageVector = getMacroIcon(button.iconName),
                     contentDescription = null,
-                    tint = if (isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = iconTint,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.height(4.dp))
@@ -833,6 +845,7 @@ fun ButtonCustomizerDialog(
 ) {
     var label by remember { mutableStateOf(button.label) }
     var iconName by remember { mutableStateOf(button.iconName) }
+    var colorHex by remember { mutableStateOf(button.colorHex) }
     var actionType by remember { mutableStateOf(getActionTypeString(button.action)) }
     var shortcutKeysText by remember { mutableStateOf(getShortcutKeysString(button.action)) }
     var longPressActionType by remember { mutableStateOf(button.longPressAction?.let { getActionTypeString(it) } ?: "None") }
@@ -842,7 +855,7 @@ fun ButtonCustomizerDialog(
 
     val actionOptions = listOf("Undo", "Redo", "Save", "Brush", "Eraser", "Fill", "Selection", "Transform", "Copy", "Paste", "CustomShortcut")
     val longPressOptions = listOf("None", "Undo", "Redo", "Save", "Brush", "Eraser", "Fill", "Selection", "Transform", "Copy", "Paste")
-    val iconOptions = listOf("undo", "redo", "save", "brush", "eraser", "fill", "select", "transform", "copy", "paste", "shortcut")
+    val iconOptions = com.onimeno.onicanvas.feature.workspace.state.WorkspaceIconLibrary.availableIcons
 
     var showActionMenu by remember { mutableStateOf(false) }
     var showLongPressMenu by remember { mutableStateOf(false) }
@@ -916,6 +929,34 @@ fun ButtonCustomizerDialog(
                                         }
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // Color Accent Swatches
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Button Color Accent", style = MaterialTheme.typography.labelSmall)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            com.onimeno.onicanvas.feature.workspace.state.WorkspaceColorPalette.presetColors.forEach { hex ->
+                                val parsed = com.onimeno.onicanvas.feature.workspace.state.WorkspaceColorPalette.parseColor(hex)
+                                val isSelected = colorHex == hex
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(parsed)
+                                        .border(
+                                            width = if (isSelected) 2.5.dp else 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { colorHex = if (isSelected) null else hex }
+                                )
                             }
                         }
                     }
@@ -1056,6 +1097,7 @@ fun ButtonCustomizerDialog(
                                 val updated = button.copy(
                                     label = label,
                                     iconName = iconName,
+                                    colorHex = colorHex,
                                     action = primAction,
                                     longPressAction = longAction,
                                     repeatEnabled = repeatEnabled,
@@ -1077,20 +1119,7 @@ fun ButtonCustomizerDialog(
 
 // Helpers
 fun getMacroIcon(iconName: String): ImageVector {
-    return when (iconName.lowercase()) {
-        "undo" -> Icons.Rounded.Undo
-        "redo" -> Icons.Rounded.Redo
-        "save" -> Icons.Rounded.Save
-        "brush" -> Icons.Rounded.Brush
-        "eraser" -> Icons.Rounded.CleaningServices
-        "fill" -> Icons.Rounded.FormatColorFill
-        "select" -> Icons.Rounded.SelectAll
-        "transform" -> Icons.Rounded.Transform
-        "copy" -> Icons.Rounded.ContentCopy
-        "paste" -> Icons.Rounded.ContentPaste
-        "shortcut" -> Icons.Rounded.Keyboard
-        else -> Icons.Rounded.SmartButton
-    }
+    return com.onimeno.onicanvas.feature.workspace.state.WorkspaceIconLibrary.getIcon(iconName)
 }
 
 fun getActionTypeString(action: MacroAction): String {

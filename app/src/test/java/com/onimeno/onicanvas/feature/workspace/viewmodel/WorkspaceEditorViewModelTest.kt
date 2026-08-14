@@ -189,6 +189,60 @@ class WorkspaceEditorViewModelTest {
     }
 
     @Test
+    fun buttonColorAndAccentColor_updatesWithUndoRedo() = runTest {
+        viewModel.loadWorkspace("ws_editor_test")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.setWorkspaceAccentColor("#EC4899")
+        var state = viewModel.uiState.value as WorkspaceEditorUiState.Success
+        assertEquals("#EC4899", state.editingWorkspace.customization.accentColorHex)
+        assertTrue(state.isDirty)
+
+        viewModel.setButtonColor("page_1", "btn_1", "#EF4444")
+        state = viewModel.uiState.value as WorkspaceEditorUiState.Success
+        val btn1 = state.editingWorkspace.macroPages.single().buttons.first { it.id == "btn_1" }
+        assertEquals("#EF4444", btn1.colorHex)
+
+        viewModel.undo()
+        state = viewModel.uiState.value as WorkspaceEditorUiState.Success
+        val btn1AfterUndo = state.editingWorkspace.macroPages.single().buttons.first { it.id == "btn_1" }
+        assertEquals(null, btn1AfterUndo.colorHex)
+
+        viewModel.undo()
+        state = viewModel.uiState.value as WorkspaceEditorUiState.Success
+        assertEquals(null, state.editingWorkspace.customization.accentColorHex)
+    }
+
+    @Test
+    fun gestureConfiguration_updatesWithUndoRedo() = runTest {
+        viewModel.loadWorkspace("ws_editor_test")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.updateGestureSensitivities(
+            zoom = 2.5f,
+            pan = 1.5f,
+            rotation = 0.8f,
+            invertZoom = true,
+            invertPanX = false,
+            invertPanY = true,
+            hapticsEnabled = false
+        )
+
+        var state = viewModel.uiState.value as WorkspaceEditorUiState.Success
+        assertEquals(2.5f, state.editingWorkspace.creativeControlsConfig.zoomSensitivity, 0.01f)
+        assertEquals(1.5f, state.editingWorkspace.creativeControlsConfig.panSensitivity, 0.01f)
+        assertTrue(state.editingWorkspace.creativeControlsConfig.invertZoom)
+        assertFalse(state.editingWorkspace.creativeControlsConfig.hapticsEnabled)
+        assertTrue(state.isDirty)
+
+        viewModel.undo()
+        state = viewModel.uiState.value as WorkspaceEditorUiState.Success
+        assertEquals(1.0f, state.editingWorkspace.creativeControlsConfig.zoomSensitivity, 0.01f)
+        assertFalse(state.editingWorkspace.creativeControlsConfig.invertZoom)
+        assertTrue(state.editingWorkspace.creativeControlsConfig.hapticsEnabled)
+    }
+
+    @Test
     fun duplicate_createsDuplicatedWorkspaceInRepository() = runTest {
         viewModel.loadWorkspace("ws_editor_test")
         testDispatcher.scheduler.advanceUntilIdle()

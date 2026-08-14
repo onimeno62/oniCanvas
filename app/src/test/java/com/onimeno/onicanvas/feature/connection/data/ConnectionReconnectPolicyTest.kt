@@ -1,8 +1,8 @@
 package com.onimeno.onicanvas.feature.connection.data
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import org.junit.Test
 
 class ConnectionReconnectPolicyTest {
 
@@ -18,10 +18,10 @@ class ConnectionReconnectPolicyTest {
 
     @Test
     fun `attempt outside retry window is rejected`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertThrows(IllegalArgumentException::class.java) {
             ConnectionReconnectPolicy.delayBeforeAttempt(0)
         }
-        assertFailsWith<IllegalArgumentException> {
+        assertThrows(IllegalArgumentException::class.java) {
             ConnectionReconnectPolicy.delayBeforeAttempt(6)
         }
     }

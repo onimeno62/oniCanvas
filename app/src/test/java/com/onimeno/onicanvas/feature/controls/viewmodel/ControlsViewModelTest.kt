@@ -189,5 +189,50 @@ class ControlsViewModelTest {
         assertEquals(MacroAction.Redo, btn.longPressAction)
         assertTrue(btn.repeatEnabled)
     }
+
+    @Test
+    fun setZoomSliderValue_updatesState() = runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.setZoomSliderValue(2.5f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value as ControlsUiState.Success
+        assertEquals(2.5f, state.zoomSliderValue, 0.001f)
+    }
+
+    @Test
+    fun updateCreativeControlsConfig_updatesWorkspaceConfig() = runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val newConfig = com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig(
+            panSensitivity = 2.2f,
+            zoomSensitivity = 1.8f,
+            rotationSensitivity = 0.5f,
+            invertPanX = true,
+            invertPanY = true,
+            invertZoom = false,
+            invertRotation = true,
+            hapticsEnabled = false
+        )
+
+        viewModel.updateCreativeControlsConfig(newConfig)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value as ControlsUiState.Success
+        assertEquals(2.2f, state.activeWorkspace.creativeControlsConfig.panSensitivity, 0.001f)
+        assertEquals(1.8f, state.activeWorkspace.creativeControlsConfig.zoomSensitivity, 0.001f)
+        assertEquals(0.5f, state.activeWorkspace.creativeControlsConfig.rotationSensitivity, 0.001f)
+        assertTrue(state.activeWorkspace.creativeControlsConfig.invertPanX)
+        assertTrue(state.activeWorkspace.creativeControlsConfig.invertPanY)
+        assertTrue(state.activeWorkspace.creativeControlsConfig.invertRotation)
+        org.junit.Assert.assertFalse(state.activeWorkspace.creativeControlsConfig.hapticsEnabled)
+    }
 }
 

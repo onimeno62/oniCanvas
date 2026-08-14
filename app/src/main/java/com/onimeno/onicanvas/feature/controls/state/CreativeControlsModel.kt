@@ -42,7 +42,16 @@ data class CreativeControlsConfig(
     val invertZoom: Boolean = false,
     val invertRotation: Boolean = false,
     val hapticsEnabled: Boolean = true
-)
+) {
+    fun normalized(): CreativeControlsConfig {
+        val existing = gestureBindings.associateBy { it.gestureType }
+        val defaults = defaultGestureBindings().associateBy { it.gestureType }
+        val normalizedBindings = GestureType.entries.map { type ->
+            existing[type] ?: defaults[type] ?: GestureBinding(type, action = GestureAction.NONE)
+        }
+        return copy(gestureBindings = normalizedBindings)
+    }
+}
 
 fun defaultGestureBindings(): List<GestureBinding> = listOf(
     GestureBinding(GestureType.ONE_FINGER_PAN, enabled = true, action = GestureAction.PAN, sensitivity = 1.0f),

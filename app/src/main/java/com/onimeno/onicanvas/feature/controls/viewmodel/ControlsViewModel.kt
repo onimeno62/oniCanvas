@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.onimeno.onicanvas.core.designsystem.components.OniStatus
 import com.onimeno.onicanvas.feature.connection.data.ConnectionRepository
 import com.onimeno.onicanvas.feature.controls.state.ControlsUiState
+import com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig
+import com.onimeno.onicanvas.feature.controls.state.CreativeControlsTransformHelper
+import com.onimeno.onicanvas.feature.controls.state.GestureAction
+import com.onimeno.onicanvas.feature.controls.state.GestureType
 import com.onimeno.onicanvas.feature.workspace.data.WorkspaceRepository
 import com.onimeno.onicanvas.feature.workspace.state.MacroAction
 import com.onimeno.onicanvas.feature.workspace.state.MacroButton
@@ -15,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -25,15 +30,30 @@ class ControlsViewModel(
 ) : ViewModel() {
 
     private val _activePageId = MutableStateFlow<String>("")
+    private val _zoomSliderValue = MutableStateFlow<Float>(1.0f)
+    val zoomSliderValue: StateFlow<Float> = _zoomSliderValue.asStateFlow()
 
     private var repeatJob: Job? = null
+
+    // Stream coalescing / throttling state
+    private val minStreamIntervalMs = 16L
+    private var lastPanDispatchTime = 0L
+    private var pendingPanX = 0.0
+    private var pendingPanY = 0.0
+
+    private var lastZoomDispatchTime = 0L
+    private var pendingZoomFactor = 1.0
+
+    private var lastRotateDispatchTime = 0L
+    private var pendingRotateAngle = 0.0
 
     val uiState: StateFlow<ControlsUiState> = combine(
         workspaceRepository.workspaces,
         workspaceRepository.activeWorkspace,
         connectionRepository.state,
-        _activePageId
-    ) { workspaces, activeWS, conn, pageId ->
+        _activePageId,
+        _zoomSliderValue
+    ) { workspaces, activeWS, conn, pageId, zoomVal ->
         if (activeWS == null) {
             ControlsUiState.Loading
         } else {
@@ -52,7 +72,8 @@ class ControlsViewModel(
                 activePageId = resolvedPageId,
                 isConnected = conn.status == OniStatus.SUCCESS,
                 connectionType = conn.transportType,
-                activeHostName = conn.activeHostName
+                activeHostName = conn.activeHostName,
+                zoomSliderValue = zoomVal
             )
         }
     }.stateIn(
@@ -309,111 +330,224 @@ class ControlsViewModel(
     }
 
     // Creative Controls & Canvas Commands
+    fun onOneFingerPan(deltaX: Double, deltaY: Double) {
+        handlePanGesture(GestureType.ONE_FINGER_PAN, deltaX, deltaY)
+    }
+
+    fun onTwoFingerPan(deltaX: Double, deltaY: Double) {
+        handlePanGesture(GestureType.TWO_FINGER_PAN, deltaX, deltaY)
+    }
+
+    // Legacy fallback
     fun onPan(deltaX: Double, deltaY: Double) {
+        onOneFingerPan(deltaX, deltaY)
+    }
+
+    private fun handlePanGesture(gestureType: GestureType, deltaX: Double, deltaY: Double) {
         val state = uiState.value as? ControlsUiState.Success ?: return
-        if (!state.isConnected) return
-        val config = state.activeWorkspace.creativeControlsConfig
-        val binding = config.gestureBindings.find {
-            it.gestureType == com.onimeno.onicanvas.feature.controls.state.GestureType.ONE_FINGER_PAN ||
-            it.gestureType == com.onimeno.onicanvas.feature.controls.state.GestureType.TWO_FINGER_PAN
+        if (!state.isConnected) {
+            pendingPanX = 0.0
+            pendingPanY = 0.0
+            return
         }
-        if (binding?.enabled == false) return
+        val config = state.activeWorkspace.creativeControlsConfig
+        val binding = CreativeControlsTransformHelper.resolveBinding(config, gestureType) ?: return
+        if (binding.action != GestureAction.PAN) return
 
-        val invertX = if (config.invertPanX) -1.0 else 1.0
-        val invertY = if (config.invertPanY) -1.0 else 1.0
-        val sens = (config.panSensitivity * (binding?.sensitivity ?: 1.0f)).toDouble()
+        val (effDx, effDy) = CreativeControlsTransformHelper.calculatePanDelta(deltaX, deltaY, config, binding)
+        if (effDx == 0.0 && effDy == 0.0) return
 
-        val effectiveDx = deltaX * sens * invertX
-        val effectiveDy = deltaY * sens * invertY
-
-        viewModelScope.launch {
-            connectionRepository.commandService.pan(effectiveDx, effectiveDy)
+        pendingPanX += effDx
+        pendingPanY += effDy
+        val now = System.currentTimeMillis()
+        if (now - lastPanDispatchTime >= minStreamIntervalMs) {
+            flushPan()
         }
     }
 
-    fun onZoom(amount: Double) {
+    fun flushPan() {
+        val state = uiState.value as? ControlsUiState.Success
+        if (state == null || !state.isConnected) {
+            pendingPanX = 0.0
+            pendingPanY = 0.0
+            return
+        }
+        val dx = pendingPanX
+        val dy = pendingPanY
+        pendingPanX = 0.0
+        pendingPanY = 0.0
+        lastPanDispatchTime = System.currentTimeMillis()
+        if (dx != 0.0 || dy != 0.0) {
+            viewModelScope.launch {
+                connectionRepository.commandService.pan(dx, dy)
+            }
+        }
+    }
+
+    fun onPinchZoom(zoomFactor: Double) {
         val state = uiState.value as? ControlsUiState.Success ?: return
-        if (!state.isConnected) return
+        if (!state.isConnected) {
+            pendingZoomFactor = 1.0
+            return
+        }
         val config = state.activeWorkspace.creativeControlsConfig
-        val binding = config.gestureBindings.find {
-            it.gestureType == com.onimeno.onicanvas.feature.controls.state.GestureType.PINCH_ZOOM
-        }
-        if (binding?.enabled == false) return
+        val binding = CreativeControlsTransformHelper.resolveBinding(config, GestureType.PINCH_ZOOM) ?: return
+        if (binding.action != GestureAction.ZOOM) return
 
-        val sens = (config.zoomSensitivity * (binding?.sensitivity ?: 1.0f)).toDouble()
-        val invert = config.invertZoom
-        val adjustedAmount = if (invert) {
-            1.0 / (1.0 + (amount - 1.0) * sens)
-        } else {
-            1.0 + (amount - 1.0) * sens
-        }
+        val effectiveFactor = CreativeControlsTransformHelper.calculateZoomAmount(zoomFactor, config, binding)
+        if (effectiveFactor == 1.0) return
 
-        viewModelScope.launch {
-            connectionRepository.commandService.zoom(adjustedAmount)
+        pendingZoomFactor *= effectiveFactor
+        val now = System.currentTimeMillis()
+        if (now - lastZoomDispatchTime >= minStreamIntervalMs) {
+            flushZoom()
+        }
+    }
+
+    // Legacy fallback
+    fun onZoom(amount: Double) {
+        onPinchZoom(amount)
+    }
+
+    fun flushZoom() {
+        val state = uiState.value as? ControlsUiState.Success
+        if (state == null || !state.isConnected) {
+            pendingZoomFactor = 1.0
+            return
+        }
+        val factor = pendingZoomFactor
+        pendingZoomFactor = 1.0
+        lastZoomDispatchTime = System.currentTimeMillis()
+        if (factor != 1.0) {
+            viewModelScope.launch {
+                connectionRepository.commandService.zoom(factor)
+            }
         }
     }
 
     fun onRotate(angleDegrees: Double) {
         val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) {
+            pendingRotateAngle = 0.0
+            return
+        }
+        val config = state.activeWorkspace.creativeControlsConfig
+        val binding = CreativeControlsTransformHelper.resolveBinding(config, GestureType.ROTATE_CANVAS) ?: return
+        if (binding.action != GestureAction.ROTATE) return
+
+        val effectiveAngle = CreativeControlsTransformHelper.calculateRotationAngle(angleDegrees, config, binding)
+        if (effectiveAngle == 0.0) return
+
+        pendingRotateAngle += effectiveAngle
+        val now = System.currentTimeMillis()
+        if (now - lastRotateDispatchTime >= minStreamIntervalMs) {
+            flushRotate()
+        }
+    }
+
+    fun flushRotate() {
+        val state = uiState.value as? ControlsUiState.Success
+        if (state == null || !state.isConnected) {
+            pendingRotateAngle = 0.0
+            return
+        }
+        val angle = pendingRotateAngle
+        pendingRotateAngle = 0.0
+        lastRotateDispatchTime = System.currentTimeMillis()
+        if (angle != 0.0) {
+            viewModelScope.launch {
+                connectionRepository.commandService.rotate(angle)
+            }
+        }
+    }
+
+    fun onGestureEnd() {
+        flushPan()
+        flushZoom()
+        flushRotate()
+    }
+
+    fun onTwoFingerTap() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
         if (!state.isConnected) return
         val config = state.activeWorkspace.creativeControlsConfig
-        val binding = config.gestureBindings.find {
-            it.gestureType == com.onimeno.onicanvas.feature.controls.state.GestureType.ROTATE_CANVAS
-        }
-        if (binding?.enabled == false) return
+        val binding = CreativeControlsTransformHelper.resolveBinding(config, GestureType.TWO_FINGER_TAP_UNDO) ?: return
+        executeGestureAction(binding.action)
+    }
 
-        val invert = if (config.invertRotation) -1.0 else 1.0
-        val sens = (config.rotationSensitivity * (binding?.sensitivity ?: 1.0f)).toDouble()
-        val effectiveAngle = angleDegrees * sens * invert
-
-        viewModelScope.launch {
-            connectionRepository.commandService.rotate(effectiveAngle)
-        }
+    fun onThreeFingerTap() {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        if (!state.isConnected) return
+        val config = state.activeWorkspace.creativeControlsConfig
+        val binding = CreativeControlsTransformHelper.resolveBinding(config, GestureType.THREE_FINGER_TAP_REDO) ?: return
+        executeGestureAction(binding.action)
     }
 
     fun onTapUndo() {
-        val state = uiState.value as? ControlsUiState.Success ?: return
-        if (!state.isConnected) return
-        viewModelScope.launch {
-            connectionRepository.commandService.undo()
-        }
+        onTwoFingerTap()
     }
 
     fun onTapRedo() {
-        val state = uiState.value as? ControlsUiState.Success ?: return
-        if (!state.isConnected) return
+        onThreeFingerTap()
+    }
+
+    private fun executeGestureAction(action: GestureAction) {
         viewModelScope.launch {
-            connectionRepository.commandService.redo()
+            when (action) {
+                GestureAction.UNDO -> connectionRepository.commandService.undo()
+                GestureAction.REDO -> connectionRepository.commandService.redo()
+                GestureAction.PAN -> { /* Discrete trigger not applicable */ }
+                GestureAction.ZOOM -> connectionRepository.commandService.resetZoom()
+                GestureAction.ROTATE -> connectionRepository.commandService.resetRotation()
+                GestureAction.NONE -> { /* Do nothing */ }
+            }
+        }
+    }
+
+    fun setZoomSliderValue(newValue: Float) {
+        val state = uiState.value as? ControlsUiState.Success ?: return
+        val clamped = newValue.coerceIn(0.2f, 4.0f)
+        val current = _zoomSliderValue.value
+        _zoomSliderValue.value = clamped
+        if (state.isConnected && current > 0f) {
+            val factor = (clamped / current).toDouble()
+            onPinchZoom(factor)
+            flushZoom()
         }
     }
 
     fun zoomIn() {
         val state = uiState.value as? ControlsUiState.Success ?: return
         if (!state.isConnected) return
+        _zoomSliderValue.value = (_zoomSliderValue.value * 1.25f).coerceAtMost(4.0f)
         viewModelScope.launch { connectionRepository.commandService.zoomIn() }
     }
 
     fun zoomOut() {
         val state = uiState.value as? ControlsUiState.Success ?: return
         if (!state.isConnected) return
+        _zoomSliderValue.value = (_zoomSliderValue.value * 0.8f).coerceAtLeast(0.2f)
         viewModelScope.launch { connectionRepository.commandService.zoomOut() }
     }
 
     fun resetZoom() {
         val state = uiState.value as? ControlsUiState.Success ?: return
         if (!state.isConnected) return
+        _zoomSliderValue.value = 1.0f
         viewModelScope.launch { connectionRepository.commandService.resetZoom() }
     }
 
     fun fitCanvas() {
         val state = uiState.value as? ControlsUiState.Success ?: return
         if (!state.isConnected) return
+        _zoomSliderValue.value = 1.0f
         viewModelScope.launch { connectionRepository.commandService.fitCanvas() }
     }
 
     fun resetView() {
         val state = uiState.value as? ControlsUiState.Success ?: return
         if (!state.isConnected) return
+        _zoomSliderValue.value = 1.0f
         viewModelScope.launch { connectionRepository.commandService.resetView() }
     }
 
@@ -447,11 +581,11 @@ class ControlsViewModel(
         viewModelScope.launch { connectionRepository.commandService.flipVertical() }
     }
 
-    fun updateCreativeControlsConfig(newConfig: com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig) {
+    fun updateCreativeControlsConfig(newConfig: CreativeControlsConfig) {
         val currentWorkspace = getActiveWorkspaceItem() ?: return
         viewModelScope.launch {
             workspaceRepository.saveWorkspace(
-                currentWorkspace.copy(creativeControlsConfig = newConfig)
+                currentWorkspace.copy(creativeControlsConfig = newConfig.normalized())
             )
         }
     }
@@ -461,3 +595,4 @@ class ControlsViewModel(
         stopRepeatAction()
     }
 }
+

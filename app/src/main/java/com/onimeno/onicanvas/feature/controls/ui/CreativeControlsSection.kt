@@ -3,7 +3,7 @@ package com.onimeno.onicanvas.feature.controls.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,11 +15,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Flip
 import androidx.compose.material.icons.rounded.Redo
 import androidx.compose.material.icons.rounded.Remove
@@ -34,6 +37,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +64,9 @@ import androidx.compose.ui.unit.dp
 import com.onimeno.onicanvas.core.designsystem.theme.LocalSpacing
 import com.onimeno.onicanvas.feature.controls.state.ControlsUiState
 import com.onimeno.onicanvas.feature.controls.state.CreativeControlsConfig
+import com.onimeno.onicanvas.feature.controls.state.GestureAction
+import com.onimeno.onicanvas.feature.controls.state.GestureBinding
+import com.onimeno.onicanvas.feature.controls.state.GestureType
 import com.onimeno.onicanvas.feature.controls.viewmodel.ControlsViewModel
 
 @Composable
@@ -108,22 +116,21 @@ fun CreativeControlsSection(
         GesturePadSurface(
             isConnected = state.isConnected,
             config = state.activeWorkspace.creativeControlsConfig,
-            onPan = { dx, dy -> viewModel.onPan(dx, dy) },
-            onZoom = { factor -> viewModel.onZoom(factor) },
-            onRotate = { angle -> viewModel.onRotate(angle) },
-            onTapUndo = { viewModel.onTapUndo() },
-            onTapRedo = { viewModel.onTapRedo() }
+            viewModel = viewModel
         )
 
         // 2. Zoom Controller Section
         ZoomControllerSection(
             isConnected = state.isConnected,
+            config = state.activeWorkspace.creativeControlsConfig,
+            zoomSliderValue = state.zoomSliderValue,
             viewModel = viewModel
         )
 
         // 3. Canvas Action Controls
         CanvasControlsSection(
             isConnected = state.isConnected,
+            config = state.activeWorkspace.creativeControlsConfig,
             viewModel = viewModel
         )
     }
@@ -144,11 +151,7 @@ fun CreativeControlsSection(
 fun GesturePadSurface(
     isConnected: Boolean,
     config: CreativeControlsConfig,
-    onPan: (Double, Double) -> Unit,
-    onZoom: (Double) -> Unit,
-    onRotate: (Double) -> Unit,
-    onTapUndo: () -> Unit,
-    onTapRedo: () -> Unit,
+    viewModel: ControlsViewModel,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -176,17 +179,35 @@ fun GesturePadSurface(
                 .padding(12.dp)
                 .pointerInput(isConnected, config) {
                     if (!isConnected) return@pointerInput
-                    detectTransformGestures(panZoomLock = false) { _, pan, zoom, rotation ->
-                        if (pan.x != 0f || pan.y != 0f) {
-                            onPan(pan.x.toDouble(), pan.y.toDouble())
+                    detectCreativeCanvasGestures(
+                        onOneFingerPan = { dx, dy ->
+                            viewModel.onOneFingerPan(dx.toDouble(), dy.toDouble())
+                        },
+                        onTwoFingerPan = { dx, dy ->
+                            viewModel.onTwoFingerPan(dx.toDouble(), dy.toDouble())
+                        },
+                        onPinchZoom = { factor ->
+                            viewModel.onPinchZoom(factor.toDouble())
+                        },
+                        onRotate = { angle ->
+                            viewModel.onRotate(angle.toDouble())
+                        },
+                        onTwoFingerTap = {
+                            viewModel.onTwoFingerTap()
+                            if (config.hapticsEnabled) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        },
+                        onThreeFingerTap = {
+                            viewModel.onThreeFingerTap()
+                            if (config.hapticsEnabled) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        },
+                        onGestureEnd = {
+                            viewModel.onGestureEnd()
                         }
-                        if (zoom != 1f) {
-                            onZoom(zoom.toDouble())
-                        }
-                        if (rotation != 0f) {
-                            onRotate(rotation.toDouble())
-                        }
-                    }
+                    )
                 },
             contentAlignment = Alignment.Center
         ) {
@@ -211,7 +232,7 @@ fun GesturePadSurface(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = if (isConnected) "1-Finger: Pan | 2-Finger: Pinch/Zoom/Rotate"
+                    text = if (isConnected) "1-Finger: Pan | 2-Finger: Pinch/Zoom/Rotate/Tap Undo | 3-Finger Tap: Redo"
                     else "Connect to companion to manipulate canvas",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -228,7 +249,7 @@ fun GesturePadSurface(
                 ) {
                     IconButton(
                         onClick = {
-                            onTapUndo()
+                            viewModel.onTapUndo()
                             if (config.hapticsEnabled) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
@@ -248,7 +269,7 @@ fun GesturePadSurface(
 
                     IconButton(
                         onClick = {
-                            onTapRedo()
+                            viewModel.onTapRedo()
                             if (config.hapticsEnabled) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
@@ -274,11 +295,12 @@ fun GesturePadSurface(
 @Composable
 fun ZoomControllerSection(
     isConnected: Boolean,
+    config: CreativeControlsConfig,
+    zoomSliderValue: Float,
     viewModel: ControlsViewModel,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
-    var sliderValue by remember { mutableStateOf(1.0f) }
 
     OutlinedCard(
         modifier = modifier.fillMaxWidth(),
@@ -301,7 +323,7 @@ fun ZoomControllerSection(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${(sliderValue * 100).toInt()}%",
+                    text = "${(zoomSliderValue * 100).toInt()}%",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -309,13 +331,9 @@ fun ZoomControllerSection(
             }
 
             Slider(
-                value = sliderValue,
+                value = zoomSliderValue,
                 onValueChange = { newValue ->
-                    if (isConnected) {
-                        val factor = newValue / sliderValue
-                        viewModel.onZoom(factor.toDouble())
-                    }
-                    sliderValue = newValue
+                    viewModel.setZoomSliderValue(newValue)
                 },
                 valueRange = 0.2f..4.0f,
                 enabled = isConnected,
@@ -331,8 +349,9 @@ fun ZoomControllerSection(
                 Button(
                     onClick = {
                         viewModel.zoomOut()
-                        sliderValue = (sliderValue * 0.8f).coerceAtLeast(0.2f)
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -345,8 +364,9 @@ fun ZoomControllerSection(
                 Button(
                     onClick = {
                         viewModel.zoomIn()
-                        sliderValue = (sliderValue * 1.25f).coerceAtMost(4.0f)
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -359,8 +379,9 @@ fun ZoomControllerSection(
                 Button(
                     onClick = {
                         viewModel.resetZoom()
-                        sliderValue = 1.0f
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -373,7 +394,9 @@ fun ZoomControllerSection(
                 Button(
                     onClick = {
                         viewModel.fitCanvas()
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -390,6 +413,7 @@ fun ZoomControllerSection(
 @Composable
 fun CanvasControlsSection(
     isConnected: Boolean,
+    config: CreativeControlsConfig,
     viewModel: ControlsViewModel,
     modifier: Modifier = Modifier
 ) {
@@ -418,7 +442,9 @@ fun CanvasControlsSection(
                 Button(
                     onClick = {
                         viewModel.resetView()
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -437,7 +463,9 @@ fun CanvasControlsSection(
                 Button(
                     onClick = {
                         viewModel.rotateLeft()
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -450,7 +478,9 @@ fun CanvasControlsSection(
                 Button(
                     onClick = {
                         viewModel.rotateRight()
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -468,7 +498,9 @@ fun CanvasControlsSection(
                 Button(
                     onClick = {
                         viewModel.resetRotation()
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -481,7 +513,9 @@ fun CanvasControlsSection(
                 Button(
                     onClick = {
                         viewModel.flipHorizontal()
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -500,7 +534,9 @@ fun CanvasControlsSection(
                 Button(
                     onClick = {
                         viewModel.flipVertical()
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (config.hapticsEnabled) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     },
                     enabled = isConnected,
                     modifier = Modifier
@@ -526,29 +562,88 @@ fun GestureConfigDialog(
     onDismiss: () -> Unit,
     onSave: (CreativeControlsConfig) -> Unit
 ) {
-    var panSens by remember { mutableStateOf(config.panSensitivity) }
-    var zoomSens by remember { mutableStateOf(config.zoomSensitivity) }
-    var rotSens by remember { mutableStateOf(config.rotationSensitivity) }
-    var invPanX by remember { mutableStateOf(config.invertPanX) }
-    var invPanY by remember { mutableStateOf(config.invertPanY) }
-    var invZoom by remember { mutableStateOf(config.invertZoom) }
-    var invRot by remember { mutableStateOf(config.invertRotation) }
-    var haptics by remember { mutableStateOf(config.hapticsEnabled) }
+    val normalizedConfig = remember(config) { config.normalized() }
+    var panSens by remember { mutableStateOf(normalizedConfig.panSensitivity) }
+    var zoomSens by remember { mutableStateOf(normalizedConfig.zoomSensitivity) }
+    var rotSens by remember { mutableStateOf(normalizedConfig.rotationSensitivity) }
+    var invPanX by remember { mutableStateOf(normalizedConfig.invertPanX) }
+    var invPanY by remember { mutableStateOf(normalizedConfig.invertPanY) }
+    var invZoom by remember { mutableStateOf(normalizedConfig.invertZoom) }
+    var invRot by remember { mutableStateOf(normalizedConfig.invertRotation) }
+    var haptics by remember { mutableStateOf(normalizedConfig.hapticsEnabled) }
+
+    var bindings by remember { mutableStateOf(normalizedConfig.gestureBindings) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.testTag("gesture_settings_dialog"),
         title = { Text("Creative Controls Settings") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "Pan Sensitivity: ${"%.1f".format(panSens)}x", style = MaterialTheme.typography.bodySmall)
-                Slider(value = panSens, onValueChange = { panSens = it }, valueRange = 0.2f..3.0f)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Section: Gesture Bindings Configuration
+                Text(
+                    text = "GESTURE BINDINGS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
 
-                Text(text = "Zoom Sensitivity: ${"%.1f".format(zoomSens)}x", style = MaterialTheme.typography.bodySmall)
-                Slider(value = zoomSens, onValueChange = { zoomSens = it }, valueRange = 0.2f..3.0f)
+                bindings.forEachIndexed { index, binding ->
+                    GestureBindingItem(
+                        binding = binding,
+                        onBindingChange = { updated ->
+                            bindings = bindings.toMutableList().also { it[index] = updated }
+                        }
+                    )
+                }
 
-                Text(text = "Rotation Sensitivity: ${"%.1f".format(rotSens)}x", style = MaterialTheme.typography.bodySmall)
-                Slider(value = rotSens, onValueChange = { rotSens = it }, valueRange = 0.2f..3.0f)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Section: Global Canvas Controls Settings
+                Text(
+                    text = "GLOBAL SENSITIVITY & INVERSION",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "Master Pan Sensitivity: ${"%.1f".format(panSens)}x",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Slider(
+                    value = panSens,
+                    onValueChange = { panSens = it },
+                    valueRange = 0.2f..3.0f,
+                    modifier = Modifier.testTag("dialog_pan_sens_slider")
+                )
+
+                Text(
+                    text = "Master Zoom Sensitivity: ${"%.1f".format(zoomSens)}x",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Slider(
+                    value = zoomSens,
+                    onValueChange = { zoomSens = it },
+                    valueRange = 0.2f..3.0f,
+                    modifier = Modifier.testTag("dialog_zoom_sens_slider")
+                )
+
+                Text(
+                    text = "Master Rotation Sensitivity: ${"%.1f".format(rotSens)}x",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Slider(
+                    value = rotSens,
+                    onValueChange = { rotSens = it },
+                    valueRange = 0.2f..3.0f,
+                    modifier = Modifier.testTag("dialog_rot_sens_slider")
+                )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -557,9 +652,9 @@ fun GestureConfigDialog(
                 ) {
                     Text("Invert Pan X / Y")
                     Row {
-                        Switch(checked = invPanX, onCheckedChange = { invPanX = it })
+                        Switch(checked = invPanX, onCheckedChange = { invPanX = it }, modifier = Modifier.testTag("dialog_inv_pan_x_switch"))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Switch(checked = invPanY, onCheckedChange = { invPanY = it })
+                        Switch(checked = invPanY, onCheckedChange = { invPanY = it }, modifier = Modifier.testTag("dialog_inv_pan_y_switch"))
                     }
                 }
 
@@ -570,9 +665,9 @@ fun GestureConfigDialog(
                 ) {
                     Text("Invert Zoom / Rotation")
                     Row {
-                        Switch(checked = invZoom, onCheckedChange = { invZoom = it })
+                        Switch(checked = invZoom, onCheckedChange = { invZoom = it }, modifier = Modifier.testTag("dialog_inv_zoom_switch"))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Switch(checked = invRot, onCheckedChange = { invRot = it })
+                        Switch(checked = invRot, onCheckedChange = { invRot = it }, modifier = Modifier.testTag("dialog_inv_rot_switch"))
                     }
                 }
 
@@ -582,7 +677,7 @@ fun GestureConfigDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Haptic Feedback")
-                    Switch(checked = haptics, onCheckedChange = { haptics = it })
+                    Switch(checked = haptics, onCheckedChange = { haptics = it }, modifier = Modifier.testTag("dialog_haptics_switch"))
                 }
             }
         },
@@ -590,7 +685,8 @@ fun GestureConfigDialog(
             Button(
                 onClick = {
                     onSave(
-                        config.copy(
+                        CreativeControlsConfig(
+                            gestureBindings = bindings,
                             panSensitivity = panSens,
                             zoomSensitivity = zoomSens,
                             rotationSensitivity = rotSens,
@@ -601,15 +697,163 @@ fun GestureConfigDialog(
                             hapticsEnabled = haptics
                         )
                     )
-                }
+                },
+                modifier = Modifier.testTag("dialog_save_btn")
             ) {
                 Text("Save")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, modifier = Modifier.testTag("dialog_cancel_btn")) {
                 Text("Cancel")
             }
         }
     )
 }
+
+@Composable
+private fun GestureBindingItem(
+    binding: GestureBinding,
+    onBindingChange: (GestureBinding) -> Unit
+) {
+    var expandedDropdown by remember { mutableStateOf(false) }
+    val isContinuous = binding.gestureType in listOf(
+        GestureType.ONE_FINGER_PAN,
+        GestureType.TWO_FINGER_PAN,
+        GestureType.PINCH_ZOOM,
+        GestureType.ROTATE_CANVAS
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = binding.gestureType.displayName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Switch(
+                    checked = binding.enabled,
+                    onCheckedChange = { onBindingChange(binding.copy(enabled = it)) },
+                    modifier = Modifier.testTag("gesture_switch_${binding.gestureType.name.lowercase()}")
+                )
+            }
+
+            if (binding.enabled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Action:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .background(
+                                    MaterialTheme.colorScheme.surface,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .clickable { expandedDropdown = true }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = binding.action.displayName,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = expandedDropdown,
+                            onDismissRequest = { expandedDropdown = false }
+                        ) {
+                            GestureAction.entries.forEach { action ->
+                                DropdownMenuItem(
+                                    text = { Text(action.displayName) },
+                                    onClick = {
+                                        onBindingChange(binding.copy(action = action))
+                                        expandedDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (isContinuous) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Sensitivity",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${"%.1f".format(binding.sensitivity)}x",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Slider(
+                            value = binding.sensitivity,
+                            onValueChange = { onBindingChange(binding.copy(sensitivity = it)) },
+                            valueRange = 0.2f..3.0f
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Invert Direction",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Switch(
+                            checked = binding.isInverted,
+                            onCheckedChange = { onBindingChange(binding.copy(isInverted = it)) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

@@ -58,9 +58,9 @@ fun WorkspaceEntity.toDomain(): WorkspaceItem {
     val persistence = if (isPhase7Payload) {
         runCatching { workspaceJson.decodeFromString<WorkspacePersistencePayload>(creativeControlsJson) }.getOrNull()
     } else null
-    val creativeControls = persistence?.creativeControls ?: runCatching {
+    val creativeControls = (persistence?.creativeControls ?: runCatching {
         workspaceJson.decodeFromString<CreativeControlsConfig>(creativeControlsJson)
-    }.getOrDefault(CreativeControlsConfig())
+    }.getOrDefault(CreativeControlsConfig())).normalized()
     val customization = persistence?.customization ?: WorkspaceCustomization()
     val pages = if (decodedPages.isEmpty()) createDefaultPages(id, gridSize) else decodedPages
 

@@ -20,7 +20,8 @@ sealed interface ControlsUiState {
         val activePageId: String,
         val isConnected: Boolean,
         val connectionType: String = "—",
-        val activeHostName: String? = null
+        val activeHostName: String? = null,
+        val zoomSliderValue: Float = 1.0f
     ) : ControlsUiState
     data class Error(val message: String) : ControlsUiState
 }

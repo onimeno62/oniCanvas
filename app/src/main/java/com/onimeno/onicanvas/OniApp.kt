@@ -20,6 +20,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +34,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.onimeno.onicanvas.core.designsystem.components.AdaptiveNavigationItem
+import com.onimeno.onicanvas.core.designsystem.components.AdaptiveNavigationScaffold
 import com.onimeno.onicanvas.feature.about.ui.AboutScreen
 import com.onimeno.onicanvas.feature.color.ui.ColorWorkflowScreen
 import com.onimeno.onicanvas.feature.color.viewmodel.ColorWorkflowViewModel
@@ -64,7 +67,7 @@ import com.onimeno.onicanvas.navigation.SettingsRoute
 import com.onimeno.onicanvas.navigation.WorkspaceEditorRoute
 import com.onimeno.onicanvas.navigation.WorkspaceRoute
 
-data class BottomNavItem<T : Any>(val route: T, val label: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector)
+data class BottomNavItem<T : Any>(val route: T, val label: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector, val testTag: String)
 
 @Composable
 fun OniApp() {
@@ -72,40 +75,29 @@ fun OniApp() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val bottomNavItems = listOf(
-        BottomNavItem(DashboardRoute, "Dashboard", Icons.Rounded.Dashboard, Icons.Rounded.Dashboard),
-        BottomNavItem(WorkspaceRoute, "Workspaces", Icons.Rounded.Storage, Icons.Rounded.Storage),
-        BottomNavItem(ControlsRoute, "Controls", Icons.Rounded.TrackChanges, Icons.Rounded.TrackChanges),
-        BottomNavItem(ColorRoute, "Color", Icons.Rounded.Palette, Icons.Rounded.Palette),
-        BottomNavItem(ProductivityRoute, "Productivity", Icons.Rounded.Layers, Icons.Rounded.Layers),
-        BottomNavItem(ConnectionRoute, "Connect", Icons.Rounded.Wifi, Icons.Rounded.Wifi),
-        BottomNavItem(ProfilesRoute, "Profiles", Icons.Rounded.FolderSpecial, Icons.Rounded.FolderSpecial)
+        AdaptiveNavigationItem(DashboardRoute, "Dashboard", Icons.Rounded.Dashboard, Icons.Rounded.Dashboard, "nav_dashboard"),
+        AdaptiveNavigationItem(WorkspaceRoute, "Workspaces", Icons.Rounded.Storage, Icons.Rounded.Storage, "nav_workspaces"),
+        AdaptiveNavigationItem(ControlsRoute, "Controls", Icons.Rounded.TrackChanges, Icons.Rounded.TrackChanges, "nav_controls"),
+        AdaptiveNavigationItem(ColorRoute, "Color", Icons.Rounded.Palette, Icons.Rounded.Palette, "nav_color"),
+        AdaptiveNavigationItem(ProductivityRoute, "Productivity", Icons.Rounded.Layers, Icons.Rounded.Layers, "nav_productivity"),
+        AdaptiveNavigationItem(ConnectionRoute, "Connect", Icons.Rounded.Wifi, Icons.Rounded.Wifi, "nav_connect"),
+        AdaptiveNavigationItem(ProfilesRoute, "Profiles", Icons.Rounded.FolderSpecial, Icons.Rounded.FolderSpecial, "nav_profiles")
     )
-    val showBottomBar = bottomNavItems.any { item -> currentDestination?.hasRoute(item.route::class) == true }
+    val showNavigation = bottomNavItems.any { item -> currentDestination?.hasRoute(item.route::class) == true }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = {
-            if (showBottomBar) NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), tonalElevation = 8.dp) {
-                bottomNavItems.forEach { item ->
-                    val isSelected = currentDestination?.hasRoute(item.route::class) == true
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { navController.navigate(item.route) { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
-                        icon = { Icon(item.selectedIcon, contentDescription = item.label) },
-                        label = { Text(item.label, style = MaterialTheme.typography.labelSmall, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
+    AdaptiveNavigationScaffold(
+        navigationItems = bottomNavItems,
+        isItemSelected = { item -> currentDestination?.hasRoute(item.route::class) == true },
+        onItemSelected = { item ->
+            navController.navigate(item.route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
             }
-        }
-    ) { innerPadding ->
-        Surface(Modifier.fillMaxSize().padding(innerPadding), color = MaterialTheme.colorScheme.background) {
+        },
+        showNavigation = showNavigation
+    ) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             NavHost(navController = navController, startDestination = DashboardRoute) {
                 composable<DashboardRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -192,18 +193,39 @@ fun WorkspaceListContent(
             OniEmptyState("No workspaces found", "Try adjusting your search query or clear the favorites filter.", Icons.Rounded.Category)
             Spacer(Modifier.weight(1.3f))
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(spacing.medium),
-                verticalArrangement = Arrangement.spacedBy(spacing.small)
-            ) {
-                item { OniSectionHeader(if (state.showFavoritesOnly) "Favorite Layouts" else "All Layouts") }
-                items(state.workspaces, key = { it.id }) { workspace ->
-                    WorkspaceRowItem(
-                        workspace = workspace,
-                        onToggleFavorite = { onToggleFavorite(workspace.id) },
-                        onClick = { onWorkspaceClick(workspace.id) }
-                    )
+            androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                val isWide = maxWidth >= 600.dp
+                if (isWide) {
+                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(minSize = 300.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(spacing.medium),
+                        horizontalArrangement = Arrangement.spacedBy(spacing.medium),
+                        verticalArrangement = Arrangement.spacedBy(spacing.small)
+                    ) {
+                        items(state.workspaces, key = { it.id }) { workspace ->
+                            WorkspaceRowItem(
+                                workspace = workspace,
+                                onToggleFavorite = { onToggleFavorite(workspace.id) },
+                                onClick = { onWorkspaceClick(workspace.id) }
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(spacing.medium),
+                        verticalArrangement = Arrangement.spacedBy(spacing.small)
+                    ) {
+                        item { OniSectionHeader(if (state.showFavoritesOnly) "Favorite Layouts" else "All Layouts") }
+                        items(state.workspaces, key = { it.id }) { workspace ->
+                            WorkspaceRowItem(
+                                workspace = workspace,
+                                onToggleFavorite = { onToggleFavorite(workspace.id) },
+                                onClick = { onWorkspaceClick(workspace.id) }
+                            )
+                        }
+                    }
                 }
             }
         }

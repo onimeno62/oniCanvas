@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -65,22 +66,92 @@ import com.onimeno.onicanvas.feature.productivity.viewmodel.ProductivityViewMode
 fun ProductivityScreen(viewModel: ProductivityViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf(ProductivityTool.RADIAL_MENU) }
-    Scaffold(modifier.fillMaxSize(), topBar = { OniTopBar(title = "Productivity") }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { StatusCard(state.isConnected) }
-            item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ProductivityTool.values().forEach { tool ->
-                        FilterChip(selected == tool, { selected = tool }, label = { Text(tool.label(), maxLines = 1) }, leadingIcon = { Icon(tool.icon(), null) }, modifier = Modifier.weight(1f).testTag("productivity_mode_${tool.name.lowercase()}"))
+    Scaffold(modifier = modifier.fillMaxSize(), topBar = { OniTopBar(title = "Productivity") }) { padding ->
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            val isTablet = maxWidth >= 720.dp
+            if (isTablet) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Left Column: Status & Tool Selector
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        StatusCard(state.isConnected)
+                        Text(
+                            text = "PRODUCTIVITY TOOLS",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ProductivityTool.values().forEach { tool ->
+                                FilterChip(
+                                    selected = selected == tool,
+                                    onClick = { selected = tool },
+                                    label = { Text(tool.label(), fontWeight = if (selected == tool) FontWeight.Bold else FontWeight.Normal) },
+                                    leadingIcon = { Icon(tool.icon(), null) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("productivity_mode_${tool.name.lowercase()}")
+                                )
+                            }
+                        }
+                    }
+
+                    // Right Column: Active Tool Panel
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1.4f)
+                            .fillMaxHeight(),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        item {
+                            when (selected) {
+                                ProductivityTool.RADIAL_MENU -> RadialPanel(state.isConnected, viewModel)
+                                ProductivityTool.TOUCHPAD -> TouchpadPanel(state.isConnected, viewModel)
+                                ProductivityTool.LAYERS -> LayerPanel(state.isConnected, viewModel)
+                                ProductivityTool.BRUSHES -> BrushPanel(state.isConnected, viewModel)
+                            }
+                        }
                     }
                 }
-            }
-            item {
-                when (selected) {
-                    ProductivityTool.RADIAL_MENU -> RadialPanel(state.isConnected, viewModel)
-                    ProductivityTool.TOUCHPAD -> TouchpadPanel(state.isConnected, viewModel)
-                    ProductivityTool.LAYERS -> LayerPanel(state.isConnected, viewModel)
-                    ProductivityTool.BRUSHES -> BrushPanel(state.isConnected, viewModel)
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item { StatusCard(state.isConnected) }
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ProductivityTool.values().forEach { tool ->
+                                FilterChip(selected == tool, { selected = tool }, label = { Text(tool.label(), maxLines = 1) }, leadingIcon = { Icon(tool.icon(), null) }, modifier = Modifier.weight(1f).testTag("productivity_mode_${tool.name.lowercase()}"))
+                            }
+                        }
+                    }
+                    item {
+                        when (selected) {
+                            ProductivityTool.RADIAL_MENU -> RadialPanel(state.isConnected, viewModel)
+                            ProductivityTool.TOUCHPAD -> TouchpadPanel(state.isConnected, viewModel)
+                            ProductivityTool.LAYERS -> LayerPanel(state.isConnected, viewModel)
+                            ProductivityTool.BRUSHES -> BrushPanel(state.isConnected, viewModel)
+                        }
+                    }
                 }
             }
         }

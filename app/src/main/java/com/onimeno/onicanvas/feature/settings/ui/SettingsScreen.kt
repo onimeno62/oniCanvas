@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -159,131 +160,285 @@ fun SettingsContent(
 ) {
     val spacing = LocalSpacing.current
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag("settings_screen_container"),
-        contentPadding = PaddingValues(spacing.medium),
-        verticalArrangement = Arrangement.spacedBy(spacing.medium)
-    ) {
-        // Section 1: Design & Aesthetics
-        item {
-            OniSectionHeader(title = "Design & Theme")
-        }
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
-                SettingsSwitchRow(
-                    title = "Dark Theme",
-                    description = "Use eye-strain reducing dark palette modes",
-                    icon = Icons.Rounded.Palette,
-                    checked = settings.darkTheme,
-                    onCheckedChange = { onToggleDarkTheme() }
-                )
-                SettingsSwitchRow(
-                    title = "Dynamic Colors",
-                    description = "Apply Material Design 3 system dynamic themes",
-                    icon = Icons.Rounded.Palette,
-                    checked = settings.dynamicColor,
-                    onCheckedChange = { onToggleDynamicColor() }
-                )
-                SettingsSwitchRow(
-                    title = "Interface Animations",
-                    description = "Enable sliding layouts and responsive micro-motion",
-                    icon = Icons.Rounded.PlayArrow,
-                    checked = settings.animationsEnabled,
-                    onCheckedChange = { onToggleAnimations() }
-                )
-            }
-        }
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val isTablet = maxWidth >= 720.dp
 
-        // Section 2: Functionality & Layout
-        item {
-            OniSectionHeader(title = "Device Controls & Auto-link")
-        }
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
-                SettingsSwitchRow(
-                    title = "Tablet Mode Optimization",
-                    description = "Adaptive split screen pane layout with side rail navigation",
-                    icon = Icons.Rounded.TabletAndroid,
-                    checked = settings.tabletMode,
-                    onCheckedChange = { onToggleTabletMode() }
-                )
-                SettingsSwitchRow(
-                    title = "Auto-Connect Companion",
-                    description = "Auto connect to paired host PC on start when available",
-                    icon = Icons.Rounded.Wifi,
-                    checked = settings.autoConnect,
-                    onCheckedChange = { onToggleAutoConnect() }
-                )
-                SettingsSpinnerRow(
-                    title = "Application Language",
-                    description = "Currently using ${settings.language}",
-                    icon = Icons.Rounded.Language,
-                    value = settings.language,
-                    onClick = {
-                        val nextLang = if (settings.language == "English") "Deutsch" else "English"
-                        onLanguageChange(nextLang)
+        if (isTablet) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(spacing.medium)
+                    .testTag("settings_screen_container"),
+                horizontalArrangement = Arrangement.spacedBy(spacing.medium)
+            ) {
+                // Left Column: Design, Theme & Layout
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(spacing.medium)
+                ) {
+                    item {
+                        OniSectionHeader(title = "Design & Theme")
                     }
-                )
-            }
-        }
-
-        // Section 3: Data Management & Backup
-        item {
-            OniSectionHeader(title = "Backup & Local Sync")
-        }
-        item {
-            OniCard(modifier = Modifier.fillMaxWidth()) {
-                Column(verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Local Backup Sync",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+                            SettingsSwitchRow(
+                                title = "Dark Theme",
+                                description = "Use eye-strain reducing dark palette modes",
+                                icon = Icons.Rounded.Palette,
+                                checked = settings.darkTheme,
+                                onCheckedChange = { onToggleDarkTheme() }
                             )
+                            SettingsSwitchRow(
+                                title = "Dynamic Colors",
+                                description = "Apply Material Design 3 system dynamic themes",
+                                icon = Icons.Rounded.Palette,
+                                checked = settings.dynamicColor,
+                                onCheckedChange = { onToggleDynamicColor() }
+                            )
+                            SettingsSwitchRow(
+                                title = "Interface Animations",
+                                description = "Enable sliding layouts and responsive micro-motion",
+                                icon = Icons.Rounded.PlayArrow,
+                                checked = settings.animationsEnabled,
+                                onCheckedChange = { onToggleAnimations() }
+                            )
+                        }
+                    }
+                    item {
+                        OniSectionHeader(title = "Device Controls & Auto-link")
+                    }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+                            SettingsSwitchRow(
+                                title = "Tablet Mode Optimization",
+                                description = "Adaptive split screen pane layout with side rail navigation",
+                                icon = Icons.Rounded.TabletAndroid,
+                                checked = settings.tabletMode,
+                                onCheckedChange = { onToggleTabletMode() }
+                            )
+                            SettingsSwitchRow(
+                                title = "Auto-Connect Companion",
+                                description = "Auto connect to paired host PC on start when available",
+                                icon = Icons.Rounded.Wifi,
+                                checked = settings.autoConnect,
+                                onCheckedChange = { onToggleAutoConnect() }
+                            )
+                        }
+                    }
+                }
+
+                // Right Column: Language & Backup Sync
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(spacing.medium)
+                ) {
+                    item {
+                        OniSectionHeader(title = "Localization")
+                    }
+                    item {
+                        SettingsSpinnerRow(
+                            title = "Application Language",
+                            description = "Currently using ${settings.language}",
+                            icon = Icons.Rounded.Language,
+                            value = settings.language,
+                            onClick = {
+                                val nextLang = if (settings.language == "English") "Deutsch" else "English"
+                                onLanguageChange(nextLang)
+                            }
+                        )
+                    }
+                    item {
+                        OniSectionHeader(title = "Backup & Local Sync")
+                    }
+                    item {
+                        OniCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "Local Backup Sync",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Last successful sync: ${settings.lastBackupDate}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    IconButton(onClick = onBackup) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.SettingsBackupRestore,
+                                            contentDescription = "Trigger backup",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(2.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(spacing.small)
+                                ) {
+                                    OniButton(
+                                        text = "Export Config",
+                                        onClick = onExport,
+                                        isPrimary = true,
+                                        icon = Icons.Rounded.CloudUpload,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OniButton(
+                                        text = "Import Config",
+                                        onClick = onImport,
+                                        isPrimary = false,
+                                        icon = Icons.Rounded.CloudDownload,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("settings_screen_container"),
+                contentPadding = PaddingValues(spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(spacing.medium)
+            ) {
+                // Section 1: Design & Aesthetics
+                item {
+                    OniSectionHeader(title = "Design & Theme")
+                }
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+                        SettingsSwitchRow(
+                            title = "Dark Theme",
+                            description = "Use eye-strain reducing dark palette modes",
+                            icon = Icons.Rounded.Palette,
+                            checked = settings.darkTheme,
+                            onCheckedChange = { onToggleDarkTheme() }
+                        )
+                        SettingsSwitchRow(
+                            title = "Dynamic Colors",
+                            description = "Apply Material Design 3 system dynamic themes",
+                            icon = Icons.Rounded.Palette,
+                            checked = settings.dynamicColor,
+                            onCheckedChange = { onToggleDynamicColor() }
+                        )
+                        SettingsSwitchRow(
+                            title = "Interface Animations",
+                            description = "Enable sliding layouts and responsive micro-motion",
+                            icon = Icons.Rounded.PlayArrow,
+                            checked = settings.animationsEnabled,
+                            onCheckedChange = { onToggleAnimations() }
+                        )
+                    }
+                }
+
+                // Section 2: Functionality & Layout
+                item {
+                    OniSectionHeader(title = "Device Controls & Auto-link")
+                }
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+                        SettingsSwitchRow(
+                            title = "Tablet Mode Optimization",
+                            description = "Adaptive split screen pane layout with side rail navigation",
+                            icon = Icons.Rounded.TabletAndroid,
+                            checked = settings.tabletMode,
+                            onCheckedChange = { onToggleTabletMode() }
+                        )
+                        SettingsSwitchRow(
+                            title = "Auto-Connect Companion",
+                            description = "Auto connect to paired host PC on start when available",
+                            icon = Icons.Rounded.Wifi,
+                            checked = settings.autoConnect,
+                            onCheckedChange = { onToggleAutoConnect() }
+                        )
+                        SettingsSpinnerRow(
+                            title = "Application Language",
+                            description = "Currently using ${settings.language}",
+                            icon = Icons.Rounded.Language,
+                            value = settings.language,
+                            onClick = {
+                                val nextLang = if (settings.language == "English") "Deutsch" else "English"
+                                onLanguageChange(nextLang)
+                            }
+                        )
+                    }
+                }
+
+                // Section 3: Data Management & Backup
+                item {
+                    OniSectionHeader(title = "Backup & Local Sync")
+                }
+                item {
+                    OniCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Local Backup Sync",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Last successful sync: ${settings.lastBackupDate}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                IconButton(onClick = onBackup) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.SettingsBackupRestore,
+                                        contentDescription = "Trigger backup",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Last successful sync: ${settings.lastBackupDate}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(onClick = onBackup) {
-                            Icon(
-                                imageVector = Icons.Rounded.SettingsBackupRestore,
-                                contentDescription = "Trigger backup",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(spacing.small)
-                    ) {
-                        OniButton(
-                            text = "Export Config",
-                            onClick = onExport,
-                            isPrimary = true,
-                            icon = Icons.Rounded.CloudUpload,
-                            modifier = Modifier.weight(1f)
-                        )
-                        OniButton(
-                            text = "Import Config",
-                            onClick = onImport,
-                            isPrimary = false,
-                            icon = Icons.Rounded.CloudDownload,
-                            modifier = Modifier.weight(1f)
-                        )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(spacing.small)
+                            ) {
+                                OniButton(
+                                    text = "Export Config",
+                                    onClick = onExport,
+                                    isPrimary = true,
+                                    icon = Icons.Rounded.CloudUpload,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OniButton(
+                                    text = "Import Config",
+                                    onClick = onImport,
+                                    isPrimary = false,
+                                    icon = Icons.Rounded.CloudDownload,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                 }
             }

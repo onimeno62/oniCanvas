@@ -78,61 +78,135 @@ fun CreativeControlsSection(
     val spacing = LocalSpacing.current
     var showSettingsDialog by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(spacing.medium)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "CREATIVE CANVAS CONTROLS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Gesture Surface & Real-time Canvas Manipulation",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(
-                onClick = { showSettingsDialog = true },
-                modifier = Modifier.testTag("gesture_settings_btn")
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val isTablet = maxWidth >= 720.dp
+
+        if (isTablet) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(spacing.medium)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Tune,
-                    contentDescription = "Gesture Settings",
-                    tint = MaterialTheme.colorScheme.primary
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "CREATIVE CANVAS CONTROLS",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Gesture Surface & Real-time Canvas Manipulation",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
+                        onClick = { showSettingsDialog = true },
+                        modifier = Modifier.testTag("gesture_settings_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Tune,
+                            contentDescription = "Gesture Settings",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.medium)
+                ) {
+                    // Left Column: Gesture Pad Surface (larger touch area)
+                    Box(modifier = Modifier.weight(1.1f)) {
+                        GesturePadSurface(
+                            isConnected = state.isConnected,
+                            config = state.activeWorkspace.creativeControlsConfig,
+                            viewModel = viewModel,
+                            modifier = Modifier.height(340.dp)
+                        )
+                    }
+
+                    // Right Column: Zoom & Canvas Actions
+                    Column(
+                        modifier = Modifier.weight(0.9f),
+                        verticalArrangement = Arrangement.spacedBy(spacing.medium)
+                    ) {
+                        ZoomControllerSection(
+                            isConnected = state.isConnected,
+                            config = state.activeWorkspace.creativeControlsConfig,
+                            zoomSliderValue = state.zoomSliderValue,
+                            viewModel = viewModel
+                        )
+                        CanvasControlsSection(
+                            isConnected = state.isConnected,
+                            config = state.activeWorkspace.creativeControlsConfig,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(spacing.medium)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "CREATIVE CANVAS CONTROLS",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Gesture Surface & Real-time Canvas Manipulation",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
+                        onClick = { showSettingsDialog = true },
+                        modifier = Modifier.testTag("gesture_settings_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Tune,
+                            contentDescription = "Gesture Settings",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                // 1. Gesture Pad Surface
+                GesturePadSurface(
+                    isConnected = state.isConnected,
+                    config = state.activeWorkspace.creativeControlsConfig,
+                    viewModel = viewModel
+                )
+
+                // 2. Zoom Controller Section
+                ZoomControllerSection(
+                    isConnected = state.isConnected,
+                    config = state.activeWorkspace.creativeControlsConfig,
+                    zoomSliderValue = state.zoomSliderValue,
+                    viewModel = viewModel
+                )
+
+                // 3. Canvas Action Controls
+                CanvasControlsSection(
+                    isConnected = state.isConnected,
+                    config = state.activeWorkspace.creativeControlsConfig,
+                    viewModel = viewModel
                 )
             }
         }
-
-        // 1. Gesture Pad Surface
-        GesturePadSurface(
-            isConnected = state.isConnected,
-            config = state.activeWorkspace.creativeControlsConfig,
-            viewModel = viewModel
-        )
-
-        // 2. Zoom Controller Section
-        ZoomControllerSection(
-            isConnected = state.isConnected,
-            config = state.activeWorkspace.creativeControlsConfig,
-            zoomSliderValue = state.zoomSliderValue,
-            viewModel = viewModel
-        )
-
-        // 3. Canvas Action Controls
-        CanvasControlsSection(
-            isConnected = state.isConnected,
-            config = state.activeWorkspace.creativeControlsConfig,
-            viewModel = viewModel
-        )
     }
 
     if (showSettingsDialog) {

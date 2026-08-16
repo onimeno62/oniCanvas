@@ -7,6 +7,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.onimeno.onicanvas.feature.color.data.ColorWorkflowRepository
 import com.onimeno.onicanvas.feature.connection.data.ConnectionRepository
 import com.onimeno.onicanvas.feature.dashboard.data.DashboardRepository
 import com.onimeno.onicanvas.feature.dashboard.data.RealDashboardRepository
@@ -49,6 +50,33 @@ private val CREATIVE_CONTROLS_MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+private val COLOR_WORKFLOW_MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS color_palettes (
+                id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                colorsJson TEXT NOT NULL,
+                isDefault INTEGER NOT NULL,
+                sortOrder INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL,
+                PRIMARY KEY(id)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS recent_colors (
+                hex TEXT NOT NULL,
+                lastUsedTimestamp INTEGER NOT NULL,
+                PRIMARY KEY(hex)
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 class AppContainer(
     context: Context
 ) {
@@ -60,7 +88,12 @@ class AppContainer(
         OniDatabase::class.java,
         "oni_canvas.db"
     )
-        .addMigrations(PROFILE_MIGRATION_1_2, WORKSPACE_MIGRATION_2_3, CREATIVE_CONTROLS_MIGRATION_3_4)
+        .addMigrations(
+            PROFILE_MIGRATION_1_2,
+            WORKSPACE_MIGRATION_2_3,
+            CREATIVE_CONTROLS_MIGRATION_3_4,
+            COLOR_WORKFLOW_MIGRATION_4_5
+        )
         .build()
 
     val settingsRepository: SettingsRepository = SettingsRepository(
@@ -77,6 +110,11 @@ class AppContainer(
     )
 
     val connectionRepository: ConnectionRepository = ConnectionRepository()
+
+    val colorWorkflowRepository: ColorWorkflowRepository = ColorWorkflowRepository(
+        workspaceDatabase.colorPaletteDao(),
+        workspaceDatabase.recentColorDao()
+    )
 
     val dashboardRepository: DashboardRepository = RealDashboardRepository(
         connectionRepository = connectionRepository,

@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.FolderSpecial
 import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.TrackChanges
 import androidx.compose.material.icons.rounded.Wifi
@@ -33,6 +34,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.onimeno.onicanvas.feature.about.ui.AboutScreen
+import com.onimeno.onicanvas.feature.color.ui.ColorWorkflowScreen
+import com.onimeno.onicanvas.feature.color.viewmodel.ColorWorkflowViewModel
+import com.onimeno.onicanvas.feature.color.viewmodel.ColorWorkflowViewModelFactory
 import com.onimeno.onicanvas.feature.connection.ui.ConnectionScreen
 import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModel
 import com.onimeno.onicanvas.feature.connection.viewmodel.ConnectionViewModelFactory
@@ -50,6 +54,7 @@ import com.onimeno.onicanvas.feature.settings.ui.SettingsScreen
 import com.onimeno.onicanvas.feature.workspace.ui.WorkspaceEditorRoute as WorkspaceEditorRouteScreen
 import com.onimeno.onicanvas.feature.workspace.ui.WorkspaceScreen
 import com.onimeno.onicanvas.navigation.AboutRoute
+import com.onimeno.onicanvas.navigation.ColorRoute
 import com.onimeno.onicanvas.navigation.ConnectionRoute
 import com.onimeno.onicanvas.navigation.ControlsRoute
 import com.onimeno.onicanvas.navigation.DashboardRoute
@@ -70,6 +75,7 @@ fun OniApp() {
         BottomNavItem(DashboardRoute, "Dashboard", Icons.Rounded.Dashboard, Icons.Rounded.Dashboard),
         BottomNavItem(WorkspaceRoute, "Workspaces", Icons.Rounded.Storage, Icons.Rounded.Storage),
         BottomNavItem(ControlsRoute, "Controls", Icons.Rounded.TrackChanges, Icons.Rounded.TrackChanges),
+        BottomNavItem(ColorRoute, "Color", Icons.Rounded.Palette, Icons.Rounded.Palette),
         BottomNavItem(ProductivityRoute, "Productivity", Icons.Rounded.Layers, Icons.Rounded.Layers),
         BottomNavItem(ConnectionRoute, "Connect", Icons.Rounded.Wifi, Icons.Rounded.Wifi),
         BottomNavItem(ProfilesRoute, "Profiles", Icons.Rounded.FolderSpecial, Icons.Rounded.FolderSpecial)
@@ -122,6 +128,11 @@ fun OniApp() {
                     val app = LocalContext.current.applicationContext as OniCanvasApp
                     val vm: ControlsViewModel = viewModel(factory = ControlsViewModelFactory(app.container.workspaceRepository, app.container.connectionRepository))
                     ControlsScreen(viewModel = vm)
+                }
+                composable<ColorRoute> {
+                    val app = LocalContext.current.applicationContext as OniCanvasApp
+                    val vm: ColorWorkflowViewModel = viewModel(factory = ColorWorkflowViewModelFactory(app.container.colorWorkflowRepository, app.container.connectionRepository))
+                    ColorWorkflowScreen(viewModel = vm)
                 }
                 composable<ProductivityRoute> {
                     val app = LocalContext.current.applicationContext as OniCanvasApp

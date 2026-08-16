@@ -50,4 +50,24 @@ class OniCanvasCommandService(
 
     suspend fun brushPreset(index: Int): Boolean =
         send("brush_preset", buildJsonObject { put("index", index) })
+
+    // Phase 8 color workflow commands.
+    suspend fun setColorHex(hex: String): Boolean =
+        send("color_hex", buildJsonObject { put("hex", hex) })
+
+    suspend fun setColorRgb(r: Int, g: Int, b: Int): Boolean =
+        send("color_rgb", buildJsonObject { put("r", r); put("g", g); put("b", b) })
+
+    suspend fun setColorHsv(hue: Float, saturation: Float, value: Float): Boolean =
+        send("color_hsv", buildJsonObject {
+            put("hue", hue.toDouble())
+            put("saturation", saturation.toDouble())
+            put("value", value.toDouble())
+        })
+
+    suspend fun sendColorPalette(name: String, colors: List<String>): Boolean =
+        send("color_palette", buildJsonObject {
+            put("name", name)
+            put("colors", JsonArray(colors.map { JsonPrimitive(it) }))
+        })
 }
